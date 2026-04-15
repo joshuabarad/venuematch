@@ -12,17 +12,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedVenue, setSelectedVenue] = useState(null);
 
-  if (!onboardingComplete) {
-    return <Onboarding />;
-  }
+  if (!onboardingComplete) return <Onboarding />;
 
-  if (selectedVenue) {
-    return (
-      <div className="max-w-md mx-auto">
-        <VenueDetail venue={selectedVenue} onClose={() => setSelectedVenue(null)} />
-      </div>
-    );
-  }
+  if (selectedVenue) return (
+    <div className="max-w-md mx-auto">
+      <VenueDetail venue={selectedVenue} onClose={() => setSelectedVenue(null)} />
+    </div>
+  );
 
   return (
     <div className="max-w-md mx-auto min-h-dvh flex flex-col relative">
