@@ -1,1 +1,101 @@
-import{useState,useEffect,useRef}from'react';import{searchArtists}from'../../lib/spotify.js';import{SEED_ARTISTS}from'../../data/venues.js';import{Music,Search,X,Loader}from'lucide-react';export function ArtistSearch({selected,onToggle,maxSelected=5}){const[query,setQuery]=useState('');const[spotifyResults,setSpotifyResults]=useState([]);const[searching,setSearching]=useState(false);const debounce=useRef(null);const fallback=SEED_ARTISTS.filter(a=>!query||a.name.toLowerCase().includes(query.toLowerCase())||a.genres.some(g=>g.toLowerCase().includes(query.toLowerCase())));useEffect(()=>{if(!query||query.length<2){setSpotifyResults([]);return;}clearTimeout(debounce.current);debounce.current=setTimeout(async()=>{setSearching(true);const results=await searchArtists(query);setSpotifyResults(results);setSearching(false);},400);return()=>clearTimeout(debounce.current);},[query]);const spotifyNames=new Set(spotifyResults.map(a=>a.name.toLowerCase()));const combined=[...spotifyResults.map(a=>({...a,source:'spotify'})),...fallback.filter(a=>!spotifyNames.has(a.name.toLowerCase())).map(a=>({...a,source:'seed'}))];const displayList=query?combined:fallback.map(a=>({...a,source:'seed'}));function handleToggle(artist){if(!selected.includes(artist.name)&&selected.length>=maxSelected)return;onToggle(artist.name,artist.genres||[]);}return(<div className="space-y-3"><div className="relative">{searching?<Loader size={14} className="absolute right-3 top-3.5 text-muted animate-spin"/>:query&&<button onClick={()=>setQuery('')} className="absolute right-3 top-3.5 text-muted"><X size={14}/></button>}<Search size={14} className="absolute left-3 top-3.5 text-muted"/><input type="text" placeholder="Search any artist or genre..." value={query} onChange={e=>setQuery(e.target.value)} className="w-full glass rounded-xl pl-9 pr-8 py-3 text-sm outline-none placeholder:text-muted"/></div>{selected.length>0&&(<div className="flex flex-wrap gap-1.5">{selected.map(name=>(<span key={name} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-brand-purple/15 border border-brand-purple/30 text-brand-purple">{name}<button onClick={()=>onToggle(name,[])} className="hover:text-white"><X size={10}/></button></span>))}</div>)}<div className="flex justify-end"><span className={`text-xs font-semibold ${selected.length===maxSelected?'text-brand-purple':'text-muted'}`}>{selected.length}/{maxSelected}</span></div><div className="grid grid-cols-2 gap-2">{displayList.map(a=>{const isSel=selected.includes(a.name);const disabled=!isSel&&selected.length>=maxSelected;return(<button key={a.id||a.name} onClick={()=>handleToggle(a)} disabled={disabled} className={`p-3 rounded-2xl text-left transition-all active:scale-95 border disabled:opacity-30 ${isSel?'border-brand-purple bg-brand-purple/10':'glass border-transparent hover:border-white/10'}`}><div className="flex items-center gap-2 mb-1.5">{a.image?(<img src={a.image} alt={a.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0"/>):(<div className="w-8 h-8 rounded-full bg-brand-purple/20 flex items-center justify-center flex-shrink-0"><Music size={12} className="text-brand-purple"/></div>)}{isSel&&<span className="ml-auto text-brand-purple text-xs font-bold">✓</span>}</div><p className="text-sm font-medium leading-tight truncate">{a.name}</p><p className="text-xs text-muted mt-0.5 truncate">{(a.genres||[]).slice(0,2).join(' · ')||'artist'}</p></button>);})}</div></div>);}
+import { useState, useEffect, useRef } from 'react';
+import { searchArtists } from '../../lib/spotify.js';
+import { SEED_ARTISTS } from '../../data/venues.js';
+import { Music, Search, X, Loader } from 'lucide-react';
+
+export function ArtistSearch({ selected, onToggle, maxSelected = 5 }) {
+  const [query, setQuery] = useState('');
+  const [spotifyResults, setSpotifyResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const debounce = useRef(null);
+
+  const fallback = SEED_ARTISTS.filter(a =>
+    !query || a.name.toLowerCase().includes(query.toLowerCase()) ||
+    a.genres.some(g => g.toLowerCase().includes(query.toLowerCase()))
+  );
+
+  useEffect(() => {
+    if (!query || query.length < 2) { setSpotifyResults([]); return; }
+    clearTimeout(debounce.current);
+    debounce.current = setTimeout(async () => {
+      setSearching(true);
+      const results = await searchArtists(query);
+      setSpotifyResults(results);
+      setSearching(false);
+    }, 400);
+    return () => clearTimeout(debounce.current);
+  }, [query]);
+
+  const spotifyNames = new Set(spotifyResults.map(a => a.name.toLowerCase()));
+  const combined = [
+    ...spotifyResults.map(a => ({ ...a, source: 'spotify' })),
+    ...fallback
+      .filter(a => !spotifyNames.has(a.name.toLowerCase()))
+      .map(a => ({ ...a, source: 'seed' })),
+  ];
+  const displayList = query ? combined : fallback.map(a => ({ ...a, source: 'seed' }));
+
+  function handleToggle(artist) {
+    if (!selected.includes(artist.name) && selected.length >= maxSelected) return;
+    onToggle(artist.name, artist.genres || []);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-3.5 text-muted" />
+        {searching
+          ? <Loader size={14} className="absolute right-3 top-3.5 text-muted animate-spin" />
+          : query && <button onClick={() => setQuery('')} className="absolute right-3 top-3.5 text-muted hover:text-soft"><X size={14} /></button>
+        }
+        <input type="text" placeholder="Search any artist or genre…"
+          value={query} onChange={e => setQuery(e.target.value)}
+          className="w-full glass rounded-xl pl-9 pr-8 py-3 text-sm outline-none placeholder:text-muted" />
+      </div>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map(name => (
+            <span key={name} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-brand-purple/15 border border-brand-purple/30 text-brand-purple">
+              {name}
+              <button onClick={() => onToggle(name, [])} className="hover:text-white"><X size={10} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex justify-between items-center">
+        <span className="text-xs text-muted">
+          {query && spotifyResults.length > 0 ? `${spotifyResults.length} from Spotify` : `${displayList.length} suggestions`}
+        </span>
+        <span className={`text-xs font-semibold ${selected.length === maxSelected ? 'text-brand-purple' : 'text-muted'}`}>
+          {selected.length}/{maxSelected} selected
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {displayList.map(a => {
+          const isSelected = selected.includes(a.name);
+          const disabled = !isSelected && selected.length >= maxSelected;
+          return (
+            <button key={`${(a.id || a.name)}`} onClick={() => handleToggle(a)} disabled={disabled}
+              className={`p-3 rounded-2xl text-left transition-all active:scale-95 border disabled:opacity-30
+                ${isSelected ? 'border-brand-purple bg-brand-purple/10' : 'glass border-transparent hover:border-white/10'}`}>
+              <div className="flex items-center gap-2 mb-1.5">
+                {a.image ? (
+                  <img src={a.image} alt={a.name} className="w8 h-8 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-brand-purple/20 flex items-center justify-center flex-shrink-0">
+                    <Music size={12} className="text-brand-purple" />
+                  </div>
+                )}
+                {isSelected && <span className="ml-auto text-brand-purple text-xs font-bold">✓</span>}
+              </div>
+              <p className="text-sm font-medium leading-tight truncate">{a.name}</p>
+              <p className="text-xs text-muted mt-0.5 truncate">
+                {(a.genres || []).slice(0, 2).join(' · ') || 'artist'}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
