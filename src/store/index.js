@@ -8,8 +8,10 @@ export const useStore = create(
       onboardingStep: 0,
       onboardingComplete: false,
       prefs: { nights: [], purposes: [], travel_radius: 'borough', neighborhoods: [] },
-      seedVenues: [],
-      seedArtists: [],
+      seedVenues: [],          // curated venue IDs
+      customSeedVenues: [],    // [{id, name, neighborhood, photo}] from Google Places
+      seedArtists: [],         // array of name strings (for compatibility)
+      seedArtistGenres: {},    // { name: [genres] }
       venueRatings: {},
       savedVenues: {},
       tonightsRec: null,
@@ -27,11 +29,26 @@ export const useStore = create(
           : s.seedVenues.length < 5 ? [...s.seedVenues, id] : s.seedVenues
       })),
 
-      toggleSeedArtist: (id) => set(s => ({
-        seedArtists: s.seedArtists.includes(id)
-          ? s.seedArtists.filter(x => x !== id)
-          : s.seedArtists.length < 5 ? [...s.seedArtists, id] : s.seedArtists
-      })),
+      toggleCustomSeedVenue: (venue) => set(s => {
+        const has = s.customSeedVenues.some(v => v.id === venue.id);
+        const total = s.seedVenues.length + s.customSeedVenues.length;
+        return {
+          customSeedVenues: has
+            ? s.customSeedVenues.filter(v => v.id !== venue.id)
+            : total < 5 ? [...s.customSeedVenues, venue] : s.customSeedVenues,
+        };
+      }),
+
+      toggleSeedArtist: (name, genres = []) => set(s => {
+        const has = s.seedArtists.includes(name);
+        const newArtists = has
+          ? s.seedArtists.filter(x => x !== name)
+          : s.seedArtists.length < 5 ? [...s.seedArtists, name] : s.seedArtists;
+        const newGenres = { ...s.seedArtistGenres };
+        if (has) delete newGenres[name];
+        else if (genres.length) newGenres[name] = genres;
+        return { seedArtists: newArtists, seedArtistGenres: newGenres };
+      }),
 
       setVenueRating: (venueId, dim, val) => set(s => ({
         venueRatings: {
@@ -47,11 +64,13 @@ export const useStore = create(
       updateTonightAnswers: (answers) => set(s => ({ tonightAnswers: { ...s.tonightAnswers, ...answers } })),
 
       getVibeVector: () => {
-        const { venueRatings, seedArtists, seedVenues } = get();
+        const { venueRatings, seedArtists, seedVenues, seedArtistGenres, customSeedVenues } = get();
         const ratings = Object.values(venueRatings);
-        if (ratings.length === 0) return { music: 3, energy: 3, dance: 3, demo: 3 };
-        const avg = (key) => ratings.reduce((s, r) => s + (r[key] || 3), 0) / ratings.length;
-        return { music: avg('music'), energy: avg('energy'), dance: avg('dance'), demo: avg('demo'), seedArtists, seedVenues };
+        const ratedCount = ratings.length;
+        const avg = (key) => ratedCount > 0
+          ? ratings.reduce((s, r) => s + (r[key] || 3), 0) / ratedCount
+          : 3;
+        return { music: avg('music'), energy: avg('energy'), dance: avg('dance'), demo: avg('demo'), ratedCount, seedArtists, seedArtistGenres, seedVenues, customSeedVenues };
       },
 
       getMatchScore: (venue) => {

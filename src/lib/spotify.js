@@ -25,7 +25,7 @@ export async function searchArtists(query) {
   const token = await getToken();
   if (!token) return [];
   try {
-    const r = await fetch(SEARCH_URL + '?q=' + encodeURIComponent(query) + '&type=artist&limit=8&market=US',
+    const r = await fetch(SEARCH_URL + '?q=' + encodeURIComponent(query) + '&type=artist&limit=10&market=US',
       { headers: { Authorization: 'Bearer ' + token } });
     const d = await r.json();
     return (d.artists?.items || []).map(a => ({

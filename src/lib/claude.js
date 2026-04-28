@@ -1,31 +1,97 @@
+function vibeScore(v, vector) {
+  const dims = [['music_score','music'],['energy_score','energy'],['dance_score','dance'],['demo_score','demo']];
+  return dims.reduce((s, [vk, uk]) => s + (1 - Math.abs((vector[uk] || 3) - v[vk]) / 5), 0) / dims.length;
+}
+
+// Build a taste profile from the user's seed venues
+function buildSeedProfile(seedVenueObjects) {
+  if (!seedVenueObjects.length) return null;
+  const avg = (key) => seedVenueObjects.reduce((s, v) => s + (v[key] || 0), 0) / seedVenueObjects.length;
+  return {
+    music: avg('music_score'),
+    energy: avg('energy_score'),
+    dance: avg('dance_score'),
+    demo: avg('demo_score'),
+    genres: [...new Set(seedVenueObjects.flatMap(v => v.music_genres))],
+    vibes: [...new Set(seedVenueObjects.flatMap(v => v.vibe_tags))],
+  };
+}
+
+// Blend explicit rating signal with implicit seed venue signal
+function enrichVector(vibeVector, seedProfile, ratedCount) {
+  if (!seedProfile) return vibeVector;
+  // Explicit ratings dominate once the user has rated venues; seeds are the prior
+  const explicitWeight = ratedCount > 0 ? 0.6 : 0;
+  const seedWeight = 1 - explicitWeight;
+  return {
+    music:  vibeVector.music  * explicitWeight + seedProfile.music  * seedWeight,
+    energy: vibeVector.energy * explicitWeight + seedProfile.energy * seedWeight,
+    dance:  vibeVector.dance  * explicitWeight + seedProfile.dance  * seedWeight,
+    demo:   vibeVector.demo   * explicitWeight + seedProfile.demo   * seedWeight,
+  };
+}
+
 export async function getTonightsRec({ vibeVector, answers, venues, savedVenueIds }) {
-  const topVenues = venues.slice(0, 15).map(v => ({
-    id: v.id, name: v.name, neighborhood: v.neighborhood,
-    genres: v.music_genres, vibe_tags: v.vibe_tags.slice(0, 3),
-    music: v.music_score, energy: v.energy_score,
-    dance: v.dance_score, crowd: v.crowd_desc,
-  }));
+  // Seed venues = taste DNA only — never candidates for recommendation
+  const seedIds = new Set([
+    ...(vibeVector.seedVenues || []),
+    ...(vibeVector.customSeedVenues || []).map(v => v.id),
+  ]);
 
-  const prompt = `You are a NYC nightlife recommendation engine with deep knowledge of the Brooklyn and Manhattan bar scene. Based on this user's taste profile and tonight's mood answers, pick the SINGLE best venue and give a punchy 1-sentence reason why it's perfect for them tonight.
+  const seedVenueObjects = venues.filter(v => seedIds.has(v.id));
+  const seedProfile = buildSeedProfile(seedVenueObjects);
+  const enriched = enrichVector(vibeVector, seedProfile, vibeVector.ratedCount || 0);
 
-User vibe profile (all scores out of 5):
-- Music: ${vibeVector.music?.toFixed(1) || 3} | Energy: ${vibeVector.energy?.toFixed(1) || 3} | Dance: ${vibeVector.dance?.toFixed(1) || 3}
-- Seed artists: ${(vibeVector.seedArtists || []).slice(0,5).join(', ') || 'not set'}
+  // Discovery pool: only venues the user hasn't already picked
+  const discoveryPool = venues.filter(v => !seedIds.has(v.id));
 
-Tonight's answers:
+  const topVenues = [...discoveryPool]
+    .sort((a, b) => vibeScore(b, enriched) - vibeScore(a, enriched))
+    .slice(0, 15)
+    .map(v => ({
+      id: v.id, name: v.name, neighborhood: v.neighborhood,
+      genres: v.music_genres, vibe_tags: v.vibe_tags.slice(0, 3),
+      music: v.music_score, energy: v.energy_score,
+      dance: v.dance_score, crowd: v.crowd_desc,
+    }));
+
+  // Seed venue names + custom Google Places venues as taste anchors for Claude
+  const seedVenueNames = [
+    ...seedVenueObjects.map(v => v.name),
+    ...(vibeVector.customSeedVenues || []).map(v => v.name),
+  ];
+
+  const seedArtistStr = (vibeVector.seedArtists || []).slice(0, 5).map(name => {
+    const genres = (vibeVector.seedArtistGenres || {})[name];
+    return genres?.length ? `${name} (${genres.slice(0, 3).join(', ')})` : name;
+  }).join(', ') || 'not set';
+
+  const prompt = `You are a NYC nightlife discovery engine. Your job is to recommend a venue the user will love but hasn't experienced yet — this is about expanding their world, not reminding them of their regulars.
+
+User's known favorites (DO NOT recommend these — use them only to understand their taste):
+${seedVenueNames.length ? seedVenueNames.join(', ') : 'none set'}
+
+Taste DNA inferred from their seeds (scores out of 5):
+- Music: ${enriched.music.toFixed(1)} | Energy: ${enriched.energy.toFixed(1)} | Dance: ${enriched.dance.toFixed(1)} | Crowd match: ${enriched.demo.toFixed(1)}
+- Genre fingerprint: ${seedProfile?.genres?.join(', ') || 'varied'}
+- Vibe fingerprint: ${seedProfile?.vibes?.join(', ') || 'varied'}
+- Artist taste: ${seedArtistStr}
+
+Tonight's mood:
 - ${answers.q1}
-- ${answers.q2}${answers.currentSong ? `\n- Listening to: "${answers.currentSong}"` : ''}
+- ${answers.q2}${answers.currentSong ? `\n- Currently listening to: "${answers.currentSong}"` : ''}
 
-Venues to choose from:
+Discovery candidates — choose from ONLY these venues:
 ${JSON.stringify(topVenues, null, 1)}
 
 Rules:
-- Pick the ONE venue that best fits the user's profile AND tonight's mood
-- The reason must be specific (mention the genre, vibe, or something concrete about the venue)
-- matchScore should be 70-98 reflecting genuine fit quality
+- Pick the ONE venue from the list above that best matches their taste DNA and tonight's mood
+- Frame the rec as a discovery: why will this feel familiar enough to love, but fresh enough to be worth the trip?
+- The reason must cite something concrete (a genre, a vibe tag, a crowd detail, a neighborhood)
+- matchScore 70–98 reflecting genuine fit quality
 
 Respond ONLY with valid JSON, no markdown fences:
-{"venueId":"v1","reason":"One specific sentence why this is perfect for them tonight","matchScore":87,"vibe":"2-3 word vibe"}`;
+{"venueId":"v1","reason":"One specific sentence why this is the right discovery for them tonight","matchScore":87,"vibe":"2-3 word vibe"}`;
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anthropicKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
@@ -48,14 +114,15 @@ Respond ONLY with valid JSON, no markdown fences:
     const text = supabaseUrl ? data.text : (data.content?.[0]?.text || '');
     return JSON.parse(text.replace(/```json|```/g, '').trim());
   } catch {
-    const scored = venues.map(v => {
-      let s = 0;
-      ['music','energy','dance','demo'].forEach((k,i) => {
-        s += 1 - Math.abs((vibeVector[k]||3) - v[['music_score','energy_score','dance_score','demo_score'][i]]) / 5;
-      });
-      return { ...v, _s: s / 4 };
-    }).sort((a,b) => b._s - a._s);
-    const best = scored[0];
-    return { venueId: best.id, reason: `Based on your taste profile, ${best.name} hits your sweet spot tonight.`, matchScore: Math.round(best._s*100), vibe: best.vibe_tags[0]||'your vibe' };
+    // Fallback: score-based pick from discovery pool only
+    const best = [...discoveryPool]
+      .map(v => ({ ...v, _s: vibeScore(v, enriched) }))
+      .sort((a, b) => b._s - a._s)[0];
+    return {
+      venueId: best.id,
+      reason: `Based on your taste profile, ${best.name} is the closest match you haven't tried yet.`,
+      matchScore: Math.round(best._s * 100),
+      vibe: best.vibe_tags[0] || 'your vibe',
+    };
   }
 }

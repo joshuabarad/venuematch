@@ -1,12 +1,66 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../../store/index.js';
 import { Button, Pill, ProgressBar, SectionHeader, RatingSlider } from '../ui/index.jsx';
 import { VenueCardSelectable } from '../venue/VenueCard.jsx';
 import { ArtistSearch } from './ArtistSearch.jsx';
+import { VenueSearch } from './VenueSearch.jsx';
+import { enrichCuratedVenues } from '../../lib/places.js';
 import { NYC_VENUES, NEIGHBORHOODS, NIGHT_TYPES } from '../../data/venues.js';
 import { ChevronRight, Music, MapPin } from 'lucide-react';
 
 const NIGHTS = ['Thursday', 'Friday', 'Saturday', 'Sunday', 'Other'];
+
+// Maps user purposes → venue score weights
+const PURPOSE_VENUE_WEIGHTS = {
+  dancing:          { dance_score: 2,   energy_score: 1 },
+  live_music:       { music_score: 2 },
+  low_key:          { energy_score: -1, music_score: 1 },
+  discover_artists: { music_score: 2 },
+  date_night:       { demo_score: 2,    energy_score: -0.5 },
+  group_outing:     { energy_score: 2,  dance_score: 1 },
+};
+
+// Maps user purposes → genre keywords for artist ranking
+const PURPOSE_GENRE_KEYWORDS = {
+  dancing:          ['house', 'techno', 'electronic', 'disco', 'dance', 'rave'],
+  live_music:       ['jazz', 'rock', 'indie', 'soul', 'experimental', 'live'],
+  low_key:          ['ambient', 'jazz', 'indie', 'folk', 'soul', 'acoustic'],
+  date_night:       ['r&b', 'soul', 'jazz', 'pop', 'dream pop'],
+  discover_artists: ['experimental', 'electronic', 'indie', 'afropop', 'afrobeats'],
+  group_outing:     ['hip-hop', 'rap', 'pop', 'reggaeton', 'latin', 'afropop'],
+};
+
+function rankVenuesByPrefs(venues, prefs) {
+  if (!prefs?.purposes?.length && !prefs?.neighborhoods?.length) return venues;
+  return [...venues].sort((a, b) => {
+    let scoreA = 0, scoreB = 0;
+    // Neighborhood boost
+    if (prefs.neighborhoods?.length) {
+      if (prefs.neighborhoods.includes(a.neighborhood)) scoreA += 3;
+      if (prefs.neighborhoods.includes(b.neighborhood)) scoreB += 3;
+    }
+    // Purpose alignment
+    for (const purpose of (prefs.purposes || [])) {
+      const weights = PURPOSE_VENUE_WEIGHTS[purpose] || {};
+      for (const [key, w] of Object.entries(weights)) {
+        scoreA += (a[key] || 0) * w;
+        scoreB += (b[key] || 0) * w;
+      }
+    }
+    return scoreB - scoreA;
+  });
+}
+
+function rankArtistsByPrefs(artists, prefs) {
+  if (!prefs?.purposes?.length) return artists;
+  const keywords = prefs.purposes.flatMap(p => PURPOSE_GENRE_KEYWORDS[p] || []);
+  if (!keywords.length) return artists;
+  return [...artists].sort((a, b) => {
+    const scoreA = (a.genres || []).filter(g => keywords.some(k => g.toLowerCase().includes(k))).length;
+    const scoreB = (b.genres || []).filter(g => keywords.some(k => g.toLowerCase().includes(k))).length;
+    return scoreB - scoreA;
+  });
+}
 const TRAVEL = [
   { id: 'neighborhood', label: 'My neighborhood only', sub: 'Within 15 min walk' },
   { id: 'borough', label: 'Anywhere in my borough', sub: 'Subway ride is fine' },
@@ -25,7 +79,7 @@ export function Onboarding() {
     <StepRateVenues key="rate" onNext={completeOnboarding} onBack={goBack} />,
   ];
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div className="h-dvh flex flex-col">
       <div className="px-5 pt-12 pb-3 flex-shrink-0">
         <ProgressBar step={onboardingStep} total={5} />
       </div>
@@ -118,26 +172,88 @@ function StepPreferences({ onNext, onBack }) {
 }
 
 function StepSeedVenues({ onNext, onBack }) {
-  const { seedVenues, toggleSeedVenue } = useStore();
+  const { seedVenues, toggleSeedVenue, customSeedVenues, toggleCustomSeedVenue, prefs } = useStore();
   const [query, setQuery] = useState('');
-  const filtered = NYC_VENUES.filter(v => !query ||
-    v.name.toLowerCase().includes(query.toLowerCase()) ||
-    v.neighborhood.toLowerCase().includes(query.toLowerCase()) ||
-    v.music_genres.some(g => g.toLowerCase().includes(query.toLowerCase())));
+  const [curatedVenues, setCuratedVenues] = useState(() => rankVenuesByPrefs(NYC_VENUES, prefs));
+  const totalSelected = seedVenues.length + customSeedVenues.length;
+  const isSearching = query.length >= 2;
+
+  useEffect(() => {
+    enrichCuratedVenues(NYC_VENUES).then(enriched => setCuratedVenues(rankVenuesByPrefs(enriched, prefs)));
+  }, []);
+
   return (
     <div className="px-5 pt-2 pb-32 max-w-md mx-auto">
-      <SectionHeader label="Step 2 of 4" title="Your favorite spots" subtitle="Pick up to 5 NYC venues you've loved. Seeds your taste graph." />
-      <input type="text" placeholder="Search by name, neighborhood, genre…" value={query} onChange={e => setQuery(e.target.value)}
-        className="w-full glass rounded-2xl px-5 py-3.5 text-sm outline-none placeholder:text-muted mb-4" />
-      <div className="flex justify-end mb-3">
-        <span className={`text-xs font-semibold ${seedVenues.length === 5 ? 'text-brand-purple' : 'text-muted'}`}>{seedVenues.length}/5 selected</span>
+      <SectionHeader label="Step 2 of 4" title="Your favorite spots" subtitle="Search any NYC venue or pick from our curated list." />
+
+      <div className="flex justify-between items-center mb-3">
+        <span className="text-xs text-muted">{isSearching ? '' : `${curatedVenues.length} venues`}</span>
+        <span className={`text-xs font-semibold ${totalSelected === 5 ? 'text-brand-purple' : 'text-muted'}`}>
+          {totalSelected}/5 selected
+        </span>
       </div>
-      <div className="space-y-2">{filtered.map(v => <VenueCardSelectable key={v.id} venue={v} selected={seedVenues.includes(v.id)} onToggle={() => toggleSeedVenue(v.id)} />)}</div>
+
+      {/* Google Places search — controls visibility of curated list */}
+      <VenueSearch
+        query={query}
+        onQueryChange={setQuery}
+        selected={customSeedVenues}
+        onToggle={toggleCustomSeedVenue}
+        maxSelected={5 - seedVenues.length}
+      />
+
+      {/* Curated list — hidden while search is active */}
+      {!isSearching && (
+        <>
+          <div className="flex items-center gap-3 my-4">
+            <div className="flex-1 h-px bg-white/8" />
+            <span className="text-xs text-muted">suggested spots</span>
+            <div className="flex-1 h-px bg-white/8" />
+          </div>
+
+          <div className="flex flex-col divide-y divide-white/5">
+            {curatedVenues.map(v => {
+              const isSelected = seedVenues.includes(v.id);
+              const disabled = !isSelected && totalSelected >= 5;
+              return (
+                <button key={v.id} onClick={() => toggleSeedVenue(v.id)} disabled={disabled}
+                  className={`flex items-center gap-3 py-2.5 w-full text-left transition-all rounded-xl disabled:opacity-30
+                    ${isSelected ? 'bg-brand-purple/10' : 'hover:bg-white/5'}`}>
+                  <div className="relative flex-shrink-0">
+                    {v.photo ? (
+                      <img src={v.photo} alt={v.name} className="w-11 h-11 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full flex items-center justify-center"
+                        style={{ background: `linear-gradient(135deg, ${v.img_color} 0%, #1a1a2e 100%)` }}>
+                        <MapPin size={14} className="text-white/70" />
+                      </div>
+                    )}
+                    {isSelected && (
+                      <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-brand-purple flex items-center justify-center ring-2 ring-[#0a0a0f]">
+                        <ChevronRight size={8} className="text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium truncate ${isSelected ? 'text-white' : 'text-soft'}`}>{v.name}</p>
+                    <p className="text-xs text-muted mt-0.5 truncate">{v.neighborhood} · {v.music_genres.slice(0, 2).join(', ')}</p>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border flex-shrink-0 flex items-center justify-center transition-all
+                    ${isSelected ? 'bg-brand-purple border-brand-purple' : 'border-white/20'}`}>
+                    {isSelected && <ChevronRight size={8} className="text-white" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
       <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/90 to-transparent">
         <div className="flex gap-3 max-w-md mx-auto">
           <Button onClick={onBack} variant="secondary" className="flex-shrink-0">Back</Button>
-          <Button onClick={onNext} disabled={seedVenues.length === 0} className="flex-1">
-            {seedVenues.length === 0 ? 'Pick at least 1' : `Continue (${seedVenues.length} selected)`} <ChevronRight size={16} className="inline ml-1" />
+          <Button onClick={onNext} disabled={totalSelected === 0} className="flex-1">
+            {totalSelected === 0 ? 'Pick at least 1' : `Continue (${totalSelected} selected)`} <ChevronRight size={16} className="inline ml-1" />
           </Button>
         </div>
       </div>
@@ -146,11 +262,11 @@ function StepSeedVenues({ onNext, onBack }) {
 }
 
 function StepSeedArtists({ onNext, onBack }) {
-  const { seedArtists, toggleSeedArtist } = useStore();
+  const { seedArtists, toggleSeedArtist, prefs } = useStore();
   return (
     <div className="px-5 pt-2 pb-32 max-w-md mx-auto">
       <SectionHeader label="Step 3 of 4" title="Your sound" subtitle="Pick 5 artists whose music defines your ideal night." />
-      <ArtistSearch selected={seedArtists} onToggle={toggleSeedArtist} maxSelected={5} />
+      <ArtistSearch selected={seedArtists} onToggle={toggleSeedArtist} maxSelected={5} prefs={prefs} rankFn={rankArtistsByPrefs} />
       <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/90 to-transparent">
         <div className="flex gap-3 max-w-md mx-auto">
           <Button onClick={onBack} variant="secondary" className="flex-shrink-0">Back</Button>
