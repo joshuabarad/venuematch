@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore } from '../store/index.js';
 import { NYC_VENUES } from '../data/venues.js';
 import { enrichCuratedVenues } from '../lib/places.js';
@@ -7,14 +7,66 @@ import { VenueMap } from '../components/venue/VenueMap.jsx';
 import { TonightsRec } from '../components/recommendation/TonightsRec.jsx';
 import { LibraryPage } from './LibraryPage.jsx';
 import { ProfilePage } from './ProfilePage.jsx';
-import { Sparkles, MapPin, Music, X, ChevronDown } from 'lucide-react';
+import { Sparkles, MapPin, Music, X, ChevronDown, Check } from 'lucide-react';
 
-const GENRE_FILTERS = ['All', 'house', 'techno', 'hip-hop', 'jazz', 'indie', 'r&b', 'disco', 'electronic', 'reggae', 'experimental'];
+// Broad genre groups → which venue music_genre strings they match
+const GENRE_GROUPS = [
+  { id: 'all',        label: 'All genres',      keywords: [] },
+  { id: 'electronic', label: 'Electronic',       keywords: ['house', 'techno', 'disco', 'electronic', 'ambient', 'bass', 'minimal', 'industrial', 'rave', 'noise'] },
+  { id: 'hiphop',     label: 'Hip-Hop & R&B',   keywords: ['hip-hop', 'rap', 'r&b', 'soul', 'funk', 'pop'] },
+  { id: 'jazz',       label: 'Jazz',             keywords: ['jazz', 'blues', 'afrobeat', 'world'] },
+  { id: 'indie',      label: 'Indie & Rock',     keywords: ['indie', 'rock', 'punk', 'folk', 'acoustic', 'indie dance', 'americana', 'country', 'classic rock'] },
+  { id: 'global',     label: 'Global',           keywords: ['reggae', 'dancehall', 'afrobeats', 'soca', 'latin', 'reggaeton', 'amapiano', 'afropop'] },
+  { id: 'experimental', label: 'Experimental',   keywords: ['experimental', 'classical', 'avant-garde'] },
+];
+
+function GenreDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const current = GENRE_GROUPS.find(g => g.id === value) || GENRE_GROUPS[0];
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all border
+          ${value !== 'all'
+            ? 'bg-brand-purple text-white border-brand-purple'
+            : 'glass text-soft border-white/10 hover:text-white'}`}
+      >
+        {current.label}
+        <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-2 w-52 bg-[#13131f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+          {GENRE_GROUPS.map(g => (
+            <button
+              key={g.id}
+              onClick={() => { onChange(g.id); setOpen(false); }}
+              className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left transition-all hover:bg-white/5
+                ${g.id === value ? 'text-white' : 'text-soft'}`}
+            >
+              {g.label}
+              {g.id === value && <Check size={13} className="text-brand-purple" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function HomePage({ onViewVenue }) {
   const { user, getMatchScore } = useStore();
   const [activeTab, setActiveTab] = useState('discover');
-  const [genreFilter, setGenreFilter] = useState('All');
+  const [genreFilter, setGenreFilter] = useState('all');
   const [showRec, setShowRec] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [venues, setVenues] = useState(NYC_VENUES);
@@ -26,8 +78,9 @@ export function HomePage({ onViewVenue }) {
 
   const filtered = useMemo(() => {
     let list = [...venues];
-    if (genreFilter !== 'All') {
-      list = list.filter(v => v.music_genres.some(g => g.toLowerCase().includes(genreFilter)));
+    if (genreFilter !== 'all') {
+      const keywords = GENRE_GROUPS.find(g => g.id === genreFilter)?.keywords || [];
+      list = list.filter(v => v.music_genres.some(g => keywords.some(k => g.toLowerCase().includes(k))));
     }
     return list.sort((a, b) => getMatchScore(b) - getMatchScore(a));
   }, [venues, genreFilter, getMatchScore]);
@@ -55,21 +108,12 @@ export function HomePage({ onViewVenue }) {
             </div>
           </button>
 
-          {/* Genre filters — only in Discover */}
+          {/* Genre dropdown — only in Discover */}
           {activeTab === 'discover' && (
-            <div className="flex-1 flex gap-2 overflow-x-auto scrollbar-hide">
-              {GENRE_FILTERS.map(g => (
-                <button key={g} onClick={() => setGenreFilter(g)}
-                  className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-medium transition-all
-                    ${genreFilter === g ? 'bg-brand-purple text-white' : 'glass text-soft hover:text-white'}`}>
-                  {g}
-                </button>
-              ))}
-            </div>
+            <GenreDropdown value={genreFilter} onChange={setGenreFilter} />
           )}
 
-          {/* Spacer when not in discover */}
-          {activeTab !== 'discover' && <div className="flex-1" />}
+          <div className="flex-1" />
 
           {/* Tonight's pick — only in Discover */}
           {activeTab === 'discover' && (
