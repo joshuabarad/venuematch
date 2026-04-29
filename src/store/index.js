@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { NYC_VENUES } from '../data/venues.js';
 
 export const useStore = create(
   persist(
@@ -17,6 +18,8 @@ export const useStore = create(
       tonightsRec: null,
       lastRecDate: null,
       tonightAnswers: { q1: null, q2: null, currentSong: '' },
+      groups: [],
+      activeGroupId: null,
 
       setUser: (user) => set({ user }),
       setOnboardingStep: (step) => set({ onboardingStep: step }),
@@ -63,6 +66,56 @@ export const useStore = create(
       setTonightsRec: (rec) => set({ tonightsRec: rec, lastRecDate: new Date().toDateString() }),
       updateTonightAnswers: (answers) => set(s => ({ tonightAnswers: { ...s.tonightAnswers, ...answers } })),
 
+      createGroup: (name) => set(s => {
+        const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+        const group = {
+          id: `g_${Date.now()}`,
+          name,
+          code,
+          createdAt: Date.now(),
+          members: [{
+            id: 'me',
+            name: s.user?.name?.split(' ')[0] || 'You',
+            seedVenues: s.seedVenues,
+            seedArtists: s.seedArtists,
+          }],
+        };
+        return { groups: [...s.groups, group] };
+      }),
+
+      addGroupMember: (groupId, member) => set(s => ({
+        groups: s.groups.map(g =>
+          g.id === groupId ? { ...g, members: [...g.members, { id: `m_${Date.now()}`, ...member }] } : g
+        ),
+      })),
+
+      removeGroupMember: (groupId, memberId) => set(s => ({
+        groups: s.groups.map(g =>
+          g.id === groupId ? { ...g, members: g.members.filter(m => m.id !== memberId) } : g
+        ),
+      })),
+
+      deleteGroup: (groupId) => set(s => ({
+        groups: s.groups.filter(g => g.id !== groupId),
+        activeGroupId: s.activeGroupId === groupId ? null : s.activeGroupId,
+      })),
+
+      setActiveGroup: (groupId) => set({ activeGroupId: groupId }),
+
+      getGroupVibeVector: (groupId) => {
+        const { groups } = get();
+        const group = groups.find(g => g.id === groupId);
+        if (!group || !group.members.length) return null;
+        const memberVectors = group.members.map(member => {
+          const seeded = NYC_VENUES.filter(v => (member.seedVenues || []).includes(v.id));
+          if (!seeded.length) return { music: 3, energy: 3, dance: 3, demo: 3 };
+          const avg = key => seeded.reduce((s, v) => s + v[key], 0) / seeded.length;
+          return { music: avg('music_score'), energy: avg('energy_score'), dance: avg('dance_score'), demo: avg('demo_score') };
+        });
+        const avg = key => memberVectors.reduce((s, v) => s + v[key], 0) / memberVectors.length;
+        return { music: avg('music'), energy: avg('energy'), dance: avg('dance'), demo: avg('demo') };
+      },
+
       getVibeVector: () => {
         const { venueRatings, seedArtists, seedVenues, seedArtistGenres, customSeedVenues } = get();
         const ratings = Object.values(venueRatings);
@@ -74,7 +127,8 @@ export const useStore = create(
       },
 
       getMatchScore: (venue) => {
-        const v = get().getVibeVector();
+        const { activeGroupId, getGroupVibeVector, getVibeVector } = get();
+        const v = activeGroupId ? (getGroupVibeVector(activeGroupId) || getVibeVector()) : getVibeVector();
         const dims = ['music_score', 'energy_score', 'dance_score', 'demo_score'];
         const keys = ['music', 'energy', 'dance', 'demo'];
         let score = 0;

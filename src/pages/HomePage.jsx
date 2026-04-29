@@ -7,7 +7,8 @@ import { VenueMap } from '../components/venue/VenueMap.jsx';
 import { TonightsRec } from '../components/recommendation/TonightsRec.jsx';
 import { LibraryPage } from './LibraryPage.jsx';
 import { ProfilePage } from './ProfilePage.jsx';
-import { Sparkles, MapPin, Music, X, ChevronDown, Check } from 'lucide-react';
+import { GroupsPage } from './GroupsPage.jsx';
+import { Sparkles, MapPin, Music, X, ChevronDown, Check, Users } from 'lucide-react';
 
 // Broad genre groups → which venue music_genre strings they match
 const GENRE_GROUPS = [
@@ -63,8 +64,63 @@ function GenreDropdown({ value, onChange }) {
   );
 }
 
+function GroupDropdown({ groups, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const current = value ? groups.find(g => g.id === value) : null;
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all border
+          ${value
+            ? 'bg-brand-purple text-white border-brand-purple'
+            : 'glass text-soft border-white/10 hover:text-white'}`}
+      >
+        <Users size={12} />
+        {current ? current.name : 'Solo'}
+        <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-2 w-52 bg-[#13131f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+          <button
+            onClick={() => { onChange(null); setOpen(false); }}
+            className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left transition-all hover:bg-white/5 ${!value ? 'text-white' : 'text-soft'}`}
+          >
+            Solo {!value && <Check size={13} className="text-brand-purple" />}
+          </button>
+          {groups.length > 0 && <div className="border-t border-white/5" />}
+          {groups.map(g => (
+            <button key={g.id}
+              onClick={() => { onChange(g.id); setOpen(false); }}
+              className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left transition-all hover:bg-white/5 ${g.id === value ? 'text-white' : 'text-soft'}`}
+            >
+              <span className="truncate">{g.name}</span>
+              <span className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                <span className="text-xs text-muted">{g.members.length}p</span>
+                {g.id === value && <Check size={13} className="text-brand-purple" />}
+              </span>
+            </button>
+          ))}
+          {groups.length === 0 && (
+            <p className="px-4 py-3 text-xs text-muted">No groups yet — create one in Groups.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function HomePage({ onViewVenue }) {
-  const { user, getMatchScore } = useStore();
+  const { user, getMatchScore, groups, activeGroupId, setActiveGroup } = useStore();
   const [activeTab, setActiveTab] = useState('discover');
   const [genreFilter, setGenreFilter] = useState('all');
   const [showRec, setShowRec] = useState(false);
@@ -119,6 +175,11 @@ export function HomePage({ onViewVenue }) {
             <GenreDropdown value={genreFilter} onChange={setGenreFilter} />
           )}
 
+          {/* Group context dropdown — only in Discover */}
+          {activeTab === 'discover' && (
+            <GroupDropdown groups={groups} value={activeGroupId} onChange={setActiveGroup} />
+          )}
+
           <div className="flex-1" />
 
           {/* Tonight's pick — only in Discover */}
@@ -138,6 +199,7 @@ export function HomePage({ onViewVenue }) {
           {[
             { id: 'discover', label: 'Discover' },
             { id: 'library',  label: 'Library'  },
+            { id: 'groups',   label: 'Groups'   },
           ].map(t => (
             <button
               key={t.id}
@@ -214,6 +276,13 @@ export function HomePage({ onViewVenue }) {
       {activeTab === 'library' && (
         <div className="flex-1 overflow-hidden flex flex-col">
           <LibraryPage onViewVenue={onViewVenue} />
+        </div>
+      )}
+
+      {/* ── Groups ── */}
+      {activeTab === 'groups' && (
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <GroupsPage onViewVenue={onViewVenue} />
         </div>
       )}
 
