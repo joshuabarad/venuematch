@@ -225,7 +225,7 @@ export function HomePage({ onViewVenue }) {
                 <X size={14} />
               </button>
             </div>
-            <TonightsRec onViewVenue={(v) => { setShowRec(false); onViewVenue(v); }} />
+            <TonightsRec allVenues={venues} onViewVenue={(v) => { setShowRec(false); onViewVenue(v); }} />
           </div>
         </div>
       )}
