@@ -23,7 +23,7 @@ export function LibraryPage({ onViewVenue }) {
   const current = tab === 'saved' ? savedList : visitedList;
 
   return (
-    <div className="flex flex-col min-h-0">
+    <div className="flex flex-col min-h-0 max-w-2xl mx-auto w-full">
       <div className="px-5 pt-12 pb-4 flex-shrink-0">
         <SectionHeader label="Your collection" title="Library" />
         <div className="flex gap-1 glass rounded-xl p-1">

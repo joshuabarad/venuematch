@@ -21,7 +21,7 @@ export default function App() {
   );
 
   return (
-    <div className="max-w-md mx-auto min-h-dvh flex flex-col relative">
+    <div className="min-h-dvh flex flex-col relative">
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         {activeTab === 'home'    && <HomePage    onViewVenue={setSelectedVenue} />}
         {activeTab === 'library' && <LibraryPage onViewVenue={setSelectedVenue} />}

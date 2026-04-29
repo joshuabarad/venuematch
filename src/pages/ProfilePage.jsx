@@ -23,7 +23,7 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="flex flex-col min-h-0">
+    <div className="flex flex-col min-h-0 max-w-2xl mx-auto w-full">
       <div className="px-5 pt-12 pb-4 flex-shrink-0">
         <SectionHeader label="Your taste" title="Profile" />
       </div>
