@@ -71,6 +71,7 @@ export function HomePage({ onViewVenue }) {
   const [showProfile, setShowProfile] = useState(false);
   const [venues, setVenues] = useState(NYC_VENUES);
   const [activeVenue, setActiveVenue] = useState(null);
+  const listRef = useRef(null);
 
   useEffect(() => {
     enrichCuratedVenues(NYC_VENUES).then(enriched => setVenues(enriched));
@@ -84,6 +85,11 @@ export function HomePage({ onViewVenue }) {
     }
     return list.sort((a, b) => getMatchScore(b) - getMatchScore(a));
   }, [venues, genreFilter, getMatchScore]);
+
+  const displayList = useMemo(() => {
+    if (!activeVenue) return filtered;
+    return [activeVenue, ...filtered.filter(v => v.id !== activeVenue.id)];
+  }, [filtered, activeVenue]);
 
   return (
     <div className="h-dvh flex flex-col">
@@ -159,7 +165,7 @@ export function HomePage({ onViewVenue }) {
             <VenueMap
               venues={filtered}
               activeVenueId={activeVenue?.id}
-              onMarkerClick={setActiveVenue}
+              onMarkerClick={(v) => { setActiveVenue(v); if (v) listRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
             />
 
             {/* Pin tap card */}
@@ -194,9 +200,9 @@ export function HomePage({ onViewVenue }) {
           </div>
 
           {/* Venue list — 35% */}
-          <div className="flex-1 overflow-y-auto border-l border-white/5 pb-6">
+          <div ref={listRef} className="flex-1 overflow-y-auto border-l border-white/5 pb-6">
             <div className="p-5 space-y-3">
-              {filtered.map(v => (
+              {displayList.map(v => (
                 <VenueCard key={v.id} venue={v} onClick={() => onViewVenue(v)} />
               ))}
             </div>
