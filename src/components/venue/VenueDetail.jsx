@@ -11,9 +11,12 @@ export function VenueDetail({ venue, onClose }) {
   return (
     <div className="min-h-dvh flex flex-col">
       {/* Hero */}
-      <div className="relative h-52 flex-shrink-0"
-        style={{ background: `linear-gradient(135deg, ${venue.img_color} 0%, #0a0a0f 100%)` }}>
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-transparent to-transparent" />
+      <div className="relative h-52 flex-shrink-0 overflow-hidden"
+        style={!venue.photo ? { background: `linear-gradient(135deg, ${venue.img_color} 0%, #0a0a0f 100%)` } : {}}>
+        {venue.photo && (
+          <img src={venue.photo} alt={venue.name} className="absolute inset-0 w-full h-full object-cover" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-black/30 to-transparent" />
 
         <button onClick={onClose}
           className="absolute top-12 left-4 w-9 h-9 rounded-full bg-black/30 flex items-center justify-center">
