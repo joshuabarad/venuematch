@@ -21,6 +21,7 @@ export function VenueMap({ venues, activeVenueId, onMarkerClick }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
+  const venuesRef = useRef({});
 
   // Init map once
   useEffect(() => {
@@ -58,6 +59,9 @@ export function VenueMap({ venues, activeVenueId, onMarkerClick }) {
       }
     }
 
+    // Keep venuesRef up-to-date so click handlers always get enriched data
+    for (const v of venues) venuesRef.current[v.id] = v;
+
     // Add or update markers
     for (const v of venues) {
       const coords = VENUE_COORDS[v.id];
@@ -68,7 +72,7 @@ export function VenueMap({ venues, activeVenueId, onMarkerClick }) {
         const m = L.marker(coords, { icon: makePin(v.id === activeVenueId) }).addTo(map);
         m.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
-          onMarkerClick(v);
+          onMarkerClick(venuesRef.current[v.id] ?? v);
         });
         existing[v.id] = m;
       }

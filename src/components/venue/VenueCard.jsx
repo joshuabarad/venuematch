@@ -1,4 +1,4 @@
-import { Heart, MapPin, Music, Zap, ChevronRight } from 'lucide-react';
+import { Heart, MapPin, Music, Zap } from 'lucide-react';
 import { MatchBadge } from '../ui/index.jsx';
 import { useStore } from '../../store/index.js';
 
@@ -16,8 +16,12 @@ export function VenueCard({ venue, showMatch = true, onClick, compact = false })
   if (compact) return (
     <div onClick={onClick}
       className="glass rounded-2xl p-4 flex items-center gap-3 cursor-pointer hover:bg-white/8 transition-all active:scale-98">
-      <div className="w-10 h-10 rounded-xl flex-shrink-0"
-        style={{ background: venue.img_color || '#1a1a2e' }} />
+      {venue.photo ? (
+        <img src={venue.photo} alt={venue.name} className="w-10 h-10 rounded-xl flex-shrink-0 object-cover" />
+      ) : (
+        <div className="w-10 h-10 rounded-xl flex-shrink-0"
+          style={{ background: `linear-gradient(135deg, ${venue.img_color || '#1a1a2e'} 0%, #0a0a0f 100%)` }} />
+      )}
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm truncate">{venue.name}</p>
         <p className="text-xs text-muted truncate">{venue.neighborhood}</p>
@@ -29,17 +33,29 @@ export function VenueCard({ venue, showMatch = true, onClick, compact = false })
   return (
     <div onClick={onClick}
       className="glass rounded-2xl overflow-hidden cursor-pointer hover:bg-white/8 transition-all duration-200 active:scale-[0.99]">
-      {/* Header image area */}
-      <div className="h-28 relative flex items-end p-4"
-        style={{ background: `linear-gradient(135deg, ${venue.img_color || '#1a1a2e'} 0%, #0a0a0f 100%)` }}>
-        <div className="flex gap-1.5 flex-wrap">
+
+      {/* Header — Google Places photo or color gradient fallback */}
+      <div className="h-36 relative flex items-end p-4 overflow-hidden">
+        {venue.photo ? (
+          <>
+            <img src={venue.photo} alt={venue.name}
+              className="absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+          </>
+        ) : (
+          <div className="absolute inset-0"
+            style={{ background: `linear-gradient(135deg, ${venue.img_color || '#1a1a2e'} 0%, #0a0a0f 100%)` }} />
+        )}
+
+        <div className="relative flex gap-1.5 flex-wrap">
           {venue.vibe_tags.slice(0, 3).map(tag => (
-            <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-black/30 text-white/70">{tag}</span>
+            <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-black/40 text-white/80 backdrop-blur-sm">{tag}</span>
           ))}
         </div>
+
         <button onClick={handleSave}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/30 flex items-center justify-center transition-all active:scale-90">
-          <Heart size={14} className={saved ? 'fill-red-400 text-red-400' : 'text-white/60'} />
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center transition-all active:scale-90 hover:bg-black/60">
+          <Heart size={14} className={saved ? 'fill-red-400 text-red-400' : 'text-white/70'} />
         </button>
       </div>
 
@@ -81,10 +97,14 @@ export function VenueCardSelectable({ venue, selected, onToggle }) {
           ? 'border-brand-purple bg-brand-purple/10'
           : 'glass border-transparent hover:border-white/15'}`}>
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center text-lg"
-          style={{ background: venue.img_color || '#1a1a2e' }}>
-          {selected && <span className="text-white text-sm font-bold">✓</span>}
-        </div>
+        {venue.photo ? (
+          <img src={venue.photo} alt={venue.name} className="w-10 h-10 rounded-xl flex-shrink-0 object-cover" />
+        ) : (
+          <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center"
+            style={{ background: `linear-gradient(135deg, ${venue.img_color || '#1a1a2e'} 0%, #0a0a0f 100%)` }}>
+            {selected && <span className="text-white text-sm font-bold">✓</span>}
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <p className={`font-medium text-sm ${selected ? 'text-white' : 'text-soft'}`}>{venue.name}</p>
           <p className="text-xs text-muted truncate">{venue.neighborhood} · {venue.music_genres.slice(0, 2).join(', ')}</p>

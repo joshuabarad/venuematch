@@ -13,7 +13,8 @@ const QUESTIONS = [
   { q1: 'Mood for the night?', opts1: ['Electronic / dance','Live music'], q2: 'Borough preference?', opts2: ['Brooklyn','Manhattan'] },
 ];
 
-export function TonightsRec({ onViewVenue }) {
+export function TonightsRec({ onViewVenue, allVenues }) {
+  const venues = allVenues?.length ? allVenues : NYC_VENUES;
   const { user, getVibeVector, savedVenues, saveVenue, tonightsRec, setTonightsRec, lastRecDate, updateTonightAnswers } = useStore();
   const [phase, setPhase] = useState('questions');
   const [qSet] = useState(QUESTIONS[new Date().getDay() % QUESTIONS.length]);
@@ -22,7 +23,7 @@ export function TonightsRec({ onViewVenue }) {
   const [song, setSong] = useState('');
   const [error, setError] = useState(null);
   const [feedback, setFeedback] = useState(null);
-  const recVenue = tonightsRec ? NYC_VENUES.find(v => v.id === tonightsRec.venueId) : null;
+  const recVenue = tonightsRec ? venues.find(v => v.id === tonightsRec.venueId) : null;
   useEffect(() => { if (lastRecDate === new Date().toDateString() && tonightsRec) setPhase('result'); }, []);
   async function handleGetRec() {
     if (!a1 || !a2) return;
@@ -30,7 +31,7 @@ export function TonightsRec({ onViewVenue }) {
     const answers = { q1: `${qSet.q1}: ${a1}`, q2: `${qSet.q2}: ${a2}`, currentSong: song };
     updateTonightAnswers(answers);
     try {
-      const rec = await getTonightsRec({ vibeVector: getVibeVector(), answers, venues: NYC_VENUES, savedVenueIds: Object.keys(savedVenues) });
+      const rec = await getTonightsRec({ vibeVector: getVibeVector(), answers, venues, savedVenueIds: Object.keys(savedVenues) });
       setTonightsRec(rec); setPhase('result');
     } catch { setError("Couldn't generate a rec right now."); setPhase('questions'); }
   }
@@ -62,7 +63,8 @@ export function TonightsRec({ onViewVenue }) {
         <button onClick={() => { setPhase('questions'); setA1(null); setA2(null); setSong(''); setFeedback(null); }} className="w-8 h-8 rounded-full glass flex items-center justify-center text-muted"><RefreshCw size={14} /></button>
       </div>
       <div className="rounded-2xl overflow-hidden border border-brand-purple/25">
-        <div className="h-32 relative" style={{ background: `linear-gradient(135deg, ${recVenue.img_color} 0px, #0d0d20 100%)` }}>
+        <div className="h-32 relative overflow-hidden" style={!recVenue.photo ? { background: `linear-gradient(135deg, ${recVenue.img_color} 0px, #0d0d20 100%)` } : {}}>
+          {recVenue.photo && <img src={recVenue.photo} alt={recVenue.name} className="absolute inset-0 w-full h-full object-cover" />}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
           <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
             <div><h3 className="text-xl font-bold">{recVenue.name}</h3><div className="flex items-center gap-1 text-white/60 text-xs"><MapPin size={10} /><span>{recVenue.neighborhood}</span></div></div>
@@ -75,7 +77,7 @@ export function TonightsRec({ onViewVenue }) {
           {!feedback?(<div className="flex gap-2 pt-1"><button onClick={() => handleFeedback('not_tonight')} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl glass text-xs text-soft"><ThumbsDown size={13}/> Not tonight</button><button onClick={() => handleFeedback('saved')} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl glass text-xs text-soft"><Heart size={13} className={savedVenues[recVenue.id]?'fill-red-400 text-red-400':''}/>{savedVenues[recVenue.id]?'Saved':'Save it'}</button><button onClick={() => onViewVenue(recVenue)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-brand-purple/80 hover:bg-brand-purple text-xs">Details <ChevronRight size={13}/></button></div>):((<div className="flex items-center justify-center gap-2 py-2.5 rounded-xl glass text-xs text-soft"><Check size={13} className="text-emerald-400"/>{feedback==='saved'?'Saved to your library':'Got it â€” we\'ll tune your next rec'}</div>))}
         </div>
       </div>
-      <p className="text-center text-xs text-muted">Refreshes daily ‚· Tap â†Š for a new pick</p>
+      <p className="text-center text-xs text-muted">Refreshes daily ï¿½ï¿½ Tap â†Š for a new pick</p>
     </div>
   );
   return null;
