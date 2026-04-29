@@ -89,7 +89,7 @@ export function HomePage({ onViewVenue }) {
     <div className="h-dvh flex flex-col">
 
       {/* ── Header ── */}
-      <div className="flex-shrink-0 border-b border-white/5">
+      <div className="flex-shrink-0 border-b border-white/5 relative z-[1000]">
 
         {/* Row 1: name · genre filters · tonight's pick */}
         <div className="flex items-center gap-6 px-8 pt-6 pb-3">
