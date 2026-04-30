@@ -1,21 +1,16 @@
-// Spotify API via client-side search
-const TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const SEARCH_URL = 'https://api.spotify.com/v1/search';
-let _token = null, _expiry = 0;
+let _token = null;
+let _expiry = 0;
 
 async function getToken() {
-  const id = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
-  const secret = import.meta.env.VITE_SPOTIFY_CLIENT_SECRET;
-  if (!id || !secret) return null;
   if (_token && Date.now() < _expiry) return _token;
   try {
-    const r = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + btoa(id + ':' + secret) },
-      body: 'grant_type=client_credentials',
-    });
+    const r = await fetch('/api/spotify-token');
+    if (!r.ok) return null;
     const d = await r.json();
-    _token = d.access_token; _expiry = Date.now() + (d.expires_in - 60) * 1000;
+    if (!d.access_token) return null;
+    _token = d.access_token;
+    _expiry = Date.now() + (d.expires_in - 60) * 1000;
     return _token;
   } catch { return null; }
 }
@@ -25,12 +20,17 @@ export async function searchArtists(query) {
   const token = await getToken();
   if (!token) return [];
   try {
-    const r = await fetch(SEARCH_URL + '?q=' + encodeURIComponent(query) + '&type=artist&limit=10&market=US',
-      { headers: { Authorization: 'Bearer ' + token } });
+    const r = await fetch(
+      `${SEARCH_URL}?q=${encodeURIComponent(query)}&type=artist&limit=10&market=US`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     const d = await r.json();
     return (d.artists?.items || []).map(a => ({
-      id: a.id, name: a.name, genres: a.genres?.slice(0,3) || [],
-      image: a.images?.[2]?.url || null, popularity: a.popularity,
+      id: a.id,
+      name: a.name,
+      genres: a.genres?.slice(0, 3) || [],
+      image: a.images?.[2]?.url || null,
+      popularity: a.popularity,
     }));
   } catch { return []; }
 }
