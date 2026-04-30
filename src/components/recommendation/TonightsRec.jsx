@@ -19,7 +19,6 @@ function SongSearch({ value, onChange }) {
   const containerRef = useRef(null);
   const hoverTimer = useRef(null);
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handler(e) { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false); }
     document.addEventListener('mousedown', handler);
@@ -31,7 +30,6 @@ function SongSearch({ value, onChange }) {
   function handleInput(e) {
     const q = e.target.value;
     setQuery(q);
-    // If user clears the field, clear selection too
     if (!q) { onChange(null); setResults([]); setOpen(false); return; }
     setOpen(true);
     clearTimeout(debounce.current);
@@ -75,11 +73,10 @@ function SongSearch({ value, onChange }) {
     audioPreview.stop();
   }
 
-  // Show selected song card
   if (value?.name && !open) {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-soft">🎵 Song on repeat?</p>
+        <p className="text-sm text-soft">Song on repeat?</p>
         <div className="glass rounded-xl p-3 flex items-center gap-3">
           {value.imageLg ? (
             <img src={value.imageLg} alt={value.name} className="w-12 h-12 rounded-lg object-cover flex-shrink-0 shadow-lg" />
@@ -102,7 +99,7 @@ function SongSearch({ value, onChange }) {
 
   return (
     <div ref={containerRef} className="space-y-2 relative">
-      <p className="text-sm text-soft">🎵 Song on repeat?</p>
+      <p className="text-sm text-soft">Song on repeat? <span className="text-muted">(optional)</span></p>
       <div className="relative">
         <Search size={13} className="absolute left-3 top-3.5 text-muted pointer-events-none" />
         <input
@@ -121,7 +118,7 @@ function SongSearch({ value, onChange }) {
       </div>
 
       {open && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#13131f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-72 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#13131f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-64 overflow-y-auto">
           {results.map(track => (
             <button
               key={track.id}
@@ -167,79 +164,199 @@ function SongSearch({ value, onChange }) {
   );
 }
 
-const QUESTIONS = [
-  { q1: 'More dancing or more chilling?', opts1: ['Dancing hard','Chill vibes'], q2: 'Big crowd or intimate?', opts2: ['Big crowd','Intimate'] },
-  { q1: "What's the energy tonight?", opts1: ['High energy','Mellow'], q2: 'Familiar or somewhere new?', opts2: ['My usual','Discover something'] },
-  { q1: 'Solo mission or group night?', opts1: ['Solo / small group','Big group'], q2: 'How late are you staying?', opts2: ['Out early','All night long'] },
-  { q1: 'Mood for the night?', opts1: ['Electronic / dance','Live music'], q2: 'Borough preference?', opts2: ['Brooklyn','Manhattan'] },
+const QUESTION_SETS = [
+  [
+    { q: 'More dancing or more chilling?', opts: ['Dancing hard', 'Chill vibes'] },
+    { q: 'Big crowd or intimate?', opts: ['Big crowd', 'Intimate'] },
+  ],
+  [
+    { q: "What's the energy tonight?", opts: ['High energy', 'Mellow'] },
+    { q: 'Familiar or somewhere new?', opts: ['My usual spot', 'Discover something'] },
+  ],
+  [
+    { q: 'Solo or squad tonight?', opts: ['Just me / small crew', 'Big group'] },
+    { q: 'How late are you staying?', opts: ['Out early', 'All night long'] },
+  ],
+  [
+    { q: 'Mood for the night?', opts: ['Electronic / dance', 'Live music'] },
+    { q: 'Brooklyn or Manhattan?', opts: ['Brooklyn', 'Manhattan'] },
+  ],
 ];
 
 export function TonightsRec({ onViewVenue, allVenues }) {
   const venues = allVenues?.length ? allVenues : NYC_VENUES;
   const { user, getVibeVector, savedVenues, saveVenue, tonightsRec, setTonightsRec, lastRecDate, updateTonightAnswers } = useStore();
   const [phase, setPhase] = useState('questions');
-  const [qSet] = useState(QUESTIONS[new Date().getDay() % QUESTIONS.length]);
-  const [a1, setA1] = useState(null);
-  const [a2, setA2] = useState(null);
-  const [song, setSong] = useState(null); // { name, artist, image, imageLg, preview_url } | null
+  const [questions] = useState(QUESTION_SETS[new Date().getDay() % QUESTION_SETS.length]);
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState([null, null]);
+  const [song, setSong] = useState(null);
   const [error, setError] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const recVenue = tonightsRec ? venues.find(v => v.id === tonightsRec.venueId) : null;
+
   useEffect(() => { if (lastRecDate === new Date().toDateString() && tonightsRec) setPhase('result'); }, []);
-  async function handleGetRec() {
-    if (!a1 || !a2) return;
-    setPhase('loading'); setError(null);
-    const answers = { q1: `${qSet.q1}: ${a1}`, q2: `${qSet.q2}: ${a2}`, currentSong: song ? `${song.name} by ${song.artist}` : '' };
-    updateTonightAnswers(answers);
-    try {
-      const rec = await getTonightsRec({ vibeVector: getVibeVector(), answers, venues, savedVenueIds: Object.keys(savedVenues) });
-      setTonightsRec(rec); setPhase('result');
-    } catch { setError("Couldn't generate a rec right now."); setPhase('questions'); }
+
+  function handleAnswer(opt) {
+    const next = [...answers];
+    next[step] = opt;
+    setAnswers(next);
+    setTimeout(() => setStep(s => s + 1), 180);
   }
+
+  async function handleGetRec() {
+    setPhase('loading'); setError(null);
+    const payload = {
+      q1: `${questions[0].q}: ${answers[0]}`,
+      q2: `${questions[1].q}: ${answers[1]}`,
+      currentSong: song ? `${song.name} by ${song.artist}` : '',
+    };
+    updateTonightAnswers(payload);
+    try {
+      const rec = await getTonightsRec({ vibeVector: getVibeVector(), answers: payload, venues, savedVenueIds: Object.keys(savedVenues) });
+      setTonightsRec(rec); setPhase('result');
+    } catch { setError("Couldn't generate a rec right now."); setPhase('questions'); setStep(0); }
+  }
+
   async function handleFeedback(action) {
     setFeedback(action);
     if (action === 'saved' && recVenue) saveVenue(recVenue.id, 'want_to_visit');
     if (user) await saveDailyRecFeedback(user.id, tonightsRec?.venueId, action, tonightsRec?.matchScore);
   }
-  if (phase === 'questions') return (
-    <div className="space-y-5">
-      <div><p className="text-xs font-semibold uppercase tracking-widest text-muted">Tonight's pick</p><h2 className="text-xl font-semibold">What are you feeling?</h2></div>
-      {error && <p className="text-red-400 text-sm glass rounded-xl px-4 py-3">{error}</p>}
-      <div className="space-y-2"><p className="text-sm text-soft">{qSet.q1}</p><div className="grid grid-cols-2 gap-2">{qSet.opts1.map(opt => <button key={opt} onClick={() => setA1(opt)} className={`py-3 px-3 rounded-xl text-sm font-medium transition-all active:scale-95 border ${a1===opt?'border-brand-purple bg-brand-purple/15 text-white':'glass border-transparent text-soft'}`}>{opt}</button>)}</div></div>
-      <div className="space-y-2"><p className="text-sm text-soft">{qSet.q2}</p><div className="grid grid-cols-2 gap-2">{qSet.opts2.map(opt => <button key={opt} onClick={() => setA2(opt)} className={`py-3 px-3 rounded-xl text-sm font-medium transition-all active:scale-95 border ${a2===opt?'border-brand-purple bg-brand-purple/15 text-white':'glass border-transparent text-soft'}`}>{opt}</button>)}</div></div>
-      <SongSearch value={song} onChange={setSong} />
-      <button onClick={handleGetRec} disabled={!a1||!a2} className="w-full py-3.5 rounded-2xl bg-brand-purple text-white font-medium text-sm hover:bg-purple-600 active:scale-[0.98] disabled:opacity-40 shadow-lg shadow-purple-900/30">Get tonight's pick ✨</button>
-    </div>
-  );
+
+  function handleReset() {
+    setPhase('questions'); setStep(0); setAnswers([null, null]); setSong(null); setFeedback(null);
+  }
+
+  if (phase === 'questions') {
+    const totalSteps = 3; // q1, q2, song
+    const currentStep = Math.min(step, totalSteps - 1);
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted">Tonight's pick</p>
+            <h2 className="text-xl font-semibold mt-0.5">What are you feeling?</h2>
+          </div>
+          {step > 0 && (
+            <button onClick={() => setStep(s => s - 1)} className="text-xs text-muted hover:text-soft transition-colors px-2 py-1">
+              Back
+            </button>
+          )}
+        </div>
+
+        {/* Progress bar */}
+        <div className="flex items-center gap-1.5">
+          {Array.from({ length: totalSteps }).map((_, i) => (
+            <div
+              key={i}
+              className={`h-1 rounded-full transition-all duration-300 ${i < currentStep ? 'bg-brand-purple' : i === currentStep ? 'bg-brand-purple/60' : 'bg-white/10'} ${i === currentStep ? 'flex-[2]' : 'flex-1'}`}
+            />
+          ))}
+        </div>
+
+        {error && <p className="text-red-400 text-sm glass rounded-xl px-4 py-3">{error}</p>}
+
+        {step < 2 && (
+          <div className="space-y-3">
+            <p className="text-base font-medium">{questions[step].q}</p>
+            <div className="space-y-3">
+              {questions[step].opts.map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => handleAnswer(opt)}
+                  className={`w-full py-4 px-5 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] border text-left
+                    ${answers[step] === opt
+                      ? 'border-brand-purple bg-brand-purple/15 text-white'
+                      : 'glass border-white/8 text-soft hover:border-white/20 hover:text-white'}`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <SongSearch value={song} onChange={setSong} />
+            <button
+              onClick={handleGetRec}
+              className="w-full py-4 rounded-2xl bg-brand-purple text-white font-semibold text-sm hover:bg-purple-600 active:scale-[0.98] shadow-lg shadow-purple-900/30 transition-all"
+            >
+              Get tonight's pick ✨
+            </button>
+            <button onClick={handleGetRec} className="w-full text-xs text-muted hover:text-soft transition-colors py-1">
+              Skip · just get my pick
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (phase === 'loading') return (
-    <div className="flex flex-col items-center justify-center py-12 space-y-4">
-      <div className="w-15 h-15 rounded-full border-2 border-brand-purple/20 border-t-brand-purple animate-spin" />
-      <p className="font-medium text-sm">Matching your vibe to NYC…...</p>
+    <div className="flex flex-col items-center justify-center py-16 space-y-4">
+      <div className="w-12 h-12 rounded-full border-2 border-brand-purple/20 border-t-brand-purple animate-spin" />
+      <p className="font-medium text-sm text-soft">Matching your vibe to NYC…</p>
     </div>
   );
+
   if (phase === 'result' && recVenue) return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div><p className="text-xs font-semibold uppercase tracking-widest text-muted">Tonight's pick</p><h2 className="text-lg font-semibold mt-0.5">Your match for tonight</h2></div>
-        <button onClick={() => { setPhase('questions'); setA1(null); setA2(null); setSong(null); setFeedback(null); }} className="w-8 h-8 rounded-full glass flex items-center justify-center text-muted"><RefreshCw size={14} /></button>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted">Tonight's pick</p>
+          <h2 className="text-lg font-semibold mt-0.5">Your match for tonight</h2>
+        </div>
+        <button onClick={handleReset} className="w-8 h-8 rounded-full glass flex items-center justify-center text-muted hover:text-white transition-all">
+          <RefreshCw size={14} />
+        </button>
       </div>
       <div className="rounded-2xl overflow-hidden border border-brand-purple/25">
-        <div className="h-32 relative overflow-hidden" style={!recVenue.photo ? { background: `linear-gradient(135deg, ${recVenue.img_color} 0px, #0d0d20 100%)` } : {}}>
+        <div className="h-36 relative overflow-hidden" style={!recVenue.photo ? { background: `linear-gradient(135deg, ${recVenue.img_color} 0px, #0d0d20 100%)` } : {}}>
           {recVenue.photo && <img src={recVenue.photo} alt={recVenue.name} className="absolute inset-0 w-full h-full object-cover" />}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
           <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
-            <div><h3 className="text-xl font-bold">{recVenue.name}</h3><div className="flex items-center gap-1 text-white/60 text-xs"><MapPin size={10} /><span>{recVenue.neighborhood}</span></div></div>
-            <MatchBadge score={tonightsRec?.matchScore||85} />
+            <div>
+              <h3 className="text-xl font-bold">{recVenue.name}</h3>
+              <div className="flex items-center gap-1 text-white/60 text-xs"><MapPin size={10} /><span>{recVenue.neighborhood}</span></div>
+            </div>
+            <MatchBadge score={tonightsRec?.matchScore || 85} />
           </div>
         </div>
         <div className="p-4 space-y-3">
           <p className="text-sm text-soft italic leading-relaxed">"{tonightsRec?.reason}"</p>
-          <div className="flex gap-3 text-xs text-muted"><span className="flex items-center gap-1"><Music size={10}/>{recVenue.music_genres.slice(0,2).join(', ')}</span><span>·</span><span className="flex items-center gap-1"><Zap size={10}/>{recVenue.energy_score.toFixed(1)} energy</span></div>
-          {!feedback?(<div className="flex gap-2 pt-1"><button onClick={() => handleFeedback('not_tonight')} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl glass text-xs text-soft"><ThumbsDown size={13}/> Not tonight</button><button onClick={() => handleFeedback('saved')} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl glass text-xs text-soft"><Heart size={13} className={savedVenues[recVenue.id]?'fill-red-400 text-red-400':''}/>{savedVenues[recVenue.id]?'Saved':'Save it'}</button><button onClick={() => onViewVenue(recVenue)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-brand-purple/80 hover:bg-brand-purple text-xs">Details <ChevronRight size={13}/></button></div>):((<div className="flex items-center justify-center gap-2 py-2.5 rounded-xl glass text-xs text-soft"><Check size={13} className="text-emerald-400"/>{feedback==='saved'?'Saved to your library':'Got it — we\'ll tune your next rec'}</div>))}
+          <div className="flex gap-3 text-xs text-muted">
+            <span className="flex items-center gap-1"><Music size={10} />{recVenue.music_genres.slice(0, 2).join(', ')}</span>
+            <span>·</span>
+            <span className="flex items-center gap-1"><Zap size={10} />{recVenue.energy_score.toFixed(1)} energy</span>
+          </div>
+          {!feedback ? (
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => handleFeedback('not_tonight')} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl glass text-xs text-soft">
+                <ThumbsDown size={13} /> Not tonight
+              </button>
+              <button onClick={() => handleFeedback('saved')} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl glass text-xs text-soft">
+                <Heart size={13} className={savedVenues[recVenue.id] ? 'fill-red-400 text-red-400' : ''} />
+                {savedVenues[recVenue.id] ? 'Saved' : 'Save it'}
+              </button>
+              <button onClick={() => onViewVenue(recVenue)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-brand-purple/80 hover:bg-brand-purple text-xs transition-all">
+                Details <ChevronRight size={13} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2 py-2.5 rounded-xl glass text-xs text-soft">
+              <Check size={13} className="text-emerald-400" />
+              {feedback === 'saved' ? 'Saved to your library' : "Got it — we'll tune your next rec"}
+            </div>
+          )}
         </div>
       </div>
-      <p className="text-center text-xs text-muted">Refreshes daily �� Tap ↊ for a new pick</p>
+      <p className="text-center text-xs text-muted">Refreshes daily · tap ↺ for a new pick</p>
     </div>
   );
+
   return null;
 }

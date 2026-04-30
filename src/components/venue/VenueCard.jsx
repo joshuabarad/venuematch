@@ -1,4 +1,4 @@
-import { Heart, MapPin, Music, Zap } from 'lucide-react';
+import { Heart, MapPin, Music } from 'lucide-react';
 import { MatchBadge } from '../ui/index.jsx';
 import { useStore } from '../../store/index.js';
 
@@ -32,57 +32,55 @@ export function VenueCard({ venue, showMatch = true, onClick, compact = false })
 
   return (
     <div onClick={onClick}
-      className="glass rounded-2xl overflow-hidden cursor-pointer hover:bg-white/8 transition-all duration-200 active:scale-[0.99]">
+      className="rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 active:scale-[0.99] bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/10">
 
-      {/* Header — Google Places photo or color gradient fallback */}
-      <div className="h-36 relative flex items-end p-4 overflow-hidden">
+      {/* Hero photo — taller, match badge floated on image */}
+      <div className="h-44 relative overflow-hidden">
         {venue.photo ? (
           <>
             <img src={venue.photo} alt={venue.name}
               className="absolute inset-0 w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
           </>
         ) : (
           <div className="absolute inset-0"
-            style={{ background: `linear-gradient(135deg, ${venue.img_color || '#1a1a2e'} 0%, #0a0a0f 100%)` }} />
+            style={{ background: `linear-gradient(145deg, ${venue.img_color || '#1a1a2e'} 0%, #0a0a0f 100%)` }} />
         )}
 
-        <div className="relative flex gap-1.5 flex-wrap">
-          {venue.vibe_tags.slice(0, 3).map(tag => (
-            <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-black/40 text-white/80 backdrop-blur-sm">{tag}</span>
-          ))}
-        </div>
+        {/* Match badge — top left on the photo */}
+        {showMatch && (
+          <div className="absolute top-3 left-3">
+            <MatchBadge score={match} />
+          </div>
+        )}
 
+        {/* Save button */}
         <button onClick={handleSave}
           className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center transition-all active:scale-90 hover:bg-black/60">
-          <Heart size={14} className={saved ? 'fill-red-400 text-red-400' : 'text-white/70'} />
+          <Heart size={13} className={saved ? 'fill-red-400 text-red-400' : 'text-white/70'} />
         </button>
+
+        {/* Venue name + neighborhood pinned to bottom of photo */}
+        <div className="absolute bottom-0 left-0 right-0 px-4 pb-3">
+          <h3 className="font-bold text-base text-white leading-tight">{venue.name}</h3>
+          <div className="flex items-center gap-1 text-white/60 text-xs mt-0.5">
+            <MapPin size={9} />
+            <span>{venue.neighborhood}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Body */}
-      <div className="p-4 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h3 className="font-semibold text-base">{venue.name}</h3>
-            <div className="flex items-center gap-1 text-muted text-xs mt-0.5">
-              <MapPin size={10} />
-              <span>{venue.neighborhood}</span>
-            </div>
-          </div>
-          {showMatch && <MatchBadge score={match} />}
-        </div>
-
+      {/* Body — leaner, just description + genre tags */}
+      <div className="px-4 py-3 space-y-2.5">
         <p className="text-soft text-xs leading-relaxed line-clamp-2">{venue.description}</p>
-
-        <div className="flex gap-3 pt-1">
-          <div className="flex items-center gap-1 text-xs text-muted">
-            <Music size={10} />
-            <span>{venue.music_genres.slice(0, 2).join(', ')}</span>
-          </div>
-          <div className="flex items-center gap-1 text-xs text-muted">
-            <Zap size={10} />
-            <span>{venue.energy_score.toFixed(1)} energy</span>
-          </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {venue.vibe_tags.slice(0, 3).map(tag => (
+            <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-white/5 border border-white/8 text-muted">{tag}</span>
+          ))}
+          <span className="ml-auto flex items-center gap-1 text-xs text-muted">
+            <Music size={9} />
+            {venue.music_genres.slice(0, 2).join(', ')}
+          </span>
         </div>
       </div>
     </div>

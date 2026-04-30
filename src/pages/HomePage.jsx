@@ -123,6 +123,7 @@ export function HomePage({ onViewVenue }) {
   const { user, getMatchScore, groups, activeGroupId, setActiveGroup } = useStore();
   const [activeTab, setActiveTab] = useState('discover');
   const [genreFilter, setGenreFilter] = useState('all');
+  const [neighborhoodFilter, setNeighborhoodFilter] = useState(null);
   const [showRec, setShowRec] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [venues, setVenues] = useState(NYC_VENUES);
@@ -133,14 +134,31 @@ export function HomePage({ onViewVenue }) {
     enrichCuratedVenues(NYC_VENUES).then(enriched => setVenues(enriched));
   }, []);
 
+  const neighborhoods = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    for (const v of venues) {
+      if (!seen.has(v.neighborhood)) { seen.add(v.neighborhood); result.push(v.neighborhood); }
+    }
+    return result.sort();
+  }, [venues]);
+
   const filtered = useMemo(() => {
     let list = [...venues];
     if (genreFilter !== 'all') {
       const keywords = GENRE_GROUPS.find(g => g.id === genreFilter)?.keywords || [];
       list = list.filter(v => v.music_genres.some(g => keywords.some(k => g.toLowerCase().includes(k))));
     }
+    if (neighborhoodFilter) {
+      list = list.filter(v => v.neighborhood === neighborhoodFilter);
+    }
     return list.sort((a, b) => getMatchScore(b) - getMatchScore(a));
-  }, [venues, genreFilter, getMatchScore]);
+  }, [venues, genreFilter, neighborhoodFilter, getMatchScore]);
+
+  const scores = useMemo(
+    () => Object.fromEntries(venues.map(v => [v.id, getMatchScore(v)])),
+    [venues, getMatchScore]
+  );
 
   const displayList = useMemo(() => {
     if (!activeVenue) return filtered;
@@ -216,6 +234,33 @@ export function HomePage({ onViewVenue }) {
             <span className="ml-auto text-xs text-muted">{filtered.length} venues</span>
           )}
         </div>
+
+        {/* Row 3: neighborhood filter pills — Discover only */}
+        {activeTab === 'discover' && (
+          <div className="flex items-center gap-2 px-8 pb-3 overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => setNeighborhoodFilter(null)}
+              className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all border
+                ${!neighborhoodFilter
+                  ? 'bg-white/10 text-white border-white/20'
+                  : 'text-muted border-white/8 hover:text-soft'}`}
+            >
+              All areas
+            </button>
+            {neighborhoods.map(n => (
+              <button
+                key={n}
+                onClick={() => setNeighborhoodFilter(f => f === n ? null : n)}
+                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all border
+                  ${neighborhoodFilter === n
+                    ? 'bg-brand-teal/20 text-brand-teal border-brand-teal/40'
+                    : 'text-muted border-white/8 hover:text-soft'}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Discover: map + list ── */}
@@ -226,6 +271,7 @@ export function HomePage({ onViewVenue }) {
           <div className="relative" style={{ flex: '0 0 65%' }}>
             <VenueMap
               venues={filtered}
+              scores={scores}
               activeVenueId={activeVenue?.id}
               onMarkerClick={(v) => { setActiveVenue(v); if (v) listRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
             />

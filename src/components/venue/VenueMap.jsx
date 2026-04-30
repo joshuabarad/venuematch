@@ -3,21 +3,29 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { VENUE_COORDS } from '../../data/venueCoords.js';
 
-function makePin(active) {
-  const size = active ? 14 : 10;
-  const color = active ? '#a78bfa' : '#7c3aed';
-  const glow = active
-    ? '0 0 10px rgba(167,139,250,0.9)'
-    : '0 2px 6px rgba(124,58,237,0.6)';
+function scoreColor(score) {
+  if (score >= 92) return { fill: '#e879f9', glow: 'rgba(232,121,249,0.8)' }; // fuchsia
+  if (score >= 85) return { fill: '#a78bfa', glow: 'rgba(167,139,250,0.7)' }; // purple
+  if (score >= 75) return { fill: '#818cf8', glow: 'rgba(129,140,248,0.6)' }; // indigo
+  return { fill: '#475569', glow: 'rgba(71,85,105,0.4)' };                    // slate
+}
+
+function makePin(active, score = 75) {
+  const { fill, glow } = scoreColor(score);
+  const size = active ? 15 : score >= 90 ? 12 : 10;
+  const border = active ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.55)';
+  const shadow = active
+    ? `0 0 12px ${glow}, 0 0 4px rgba(255,255,255,0.4)`
+    : `0 0 6px ${glow}`;
   return L.divIcon({
     className: '',
-    html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,0.85);box-shadow:${glow}"></div>`,
+    html: `<div style="width:${size}px;height:${size}px;background:${active ? '#fff' : fill};border-radius:50%;border:2px solid ${border};box-shadow:${shadow};transition:all 0.2s"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
 }
 
-export function VenueMap({ venues, activeVenueId, onMarkerClick }) {
+export function VenueMap({ venues, activeVenueId, onMarkerClick, scores = {} }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
@@ -66,10 +74,11 @@ export function VenueMap({ venues, activeVenueId, onMarkerClick }) {
     for (const v of venues) {
       const coords = VENUE_COORDS[v.id];
       if (!coords) continue;
+      const score = scores[v.id] ?? 75;
       if (existing[v.id]) {
-        existing[v.id].setIcon(makePin(v.id === activeVenueId));
+        existing[v.id].setIcon(makePin(v.id === activeVenueId, score));
       } else {
-        const m = L.marker(coords, { icon: makePin(v.id === activeVenueId) }).addTo(map);
+        const m = L.marker(coords, { icon: makePin(v.id === activeVenueId, score) }).addTo(map);
         m.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
           onMarkerClick(venuesRef.current[v.id] ?? v);
@@ -80,12 +89,12 @@ export function VenueMap({ venues, activeVenueId, onMarkerClick }) {
     markersRef.current = existing;
   }, [venues, activeVenueId]);
 
-  // Update pin styles when active venue changes without re-creating markers
+  // Update pin styles when active venue or scores change
   useEffect(() => {
     for (const [id, marker] of Object.entries(markersRef.current)) {
-      marker.setIcon(makePin(id === activeVenueId));
+      marker.setIcon(makePin(id === activeVenueId, scores[id] ?? 75));
     }
-  }, [activeVenueId]);
+  }, [activeVenueId, scores]);
 
   return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />;
 }
