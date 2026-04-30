@@ -7,7 +7,7 @@ import { VenueSearch } from '../components/onboarding/VenueSearch.jsx';
 import { enrichCuratedVenues } from '../lib/places.js';
 import { buildUserVector } from '../lib/vectorRec.js';
 import { VECTOR_DIMS } from '../data/venueProfiles.js';
-import { Music, MapPin, RotateCcw, ChevronRight, Pencil, X, Check } from 'lucide-react';
+import { Music, MapPin, RotateCcw, ChevronRight, Pencil, X, Check, Moon, Sun } from 'lucide-react';
 
 const DIM_LABELS = {
   music_curation: 'Music quality',
@@ -47,7 +47,7 @@ function EditDrawer({ title, subtitle, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[#0d0d1a] border-t border-white/10 rounded-t-3xl flex flex-col max-h-[90dvh]">
+      <div className="relative bg-[var(--bg-drawer)] border-t border-white/10 rounded-t-3xl flex flex-col max-h-[90dvh]">
         <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-muted">{subtitle}</p>
@@ -213,7 +213,7 @@ function SoundEditor() {
 // ── Main profile page ────────────────────────────────────────────────────────
 
 export function ProfilePage() {
-  const { user, prefs, seedVenues, seedArtists, seedArtistGenres, customSeedVenues } = useStore();
+  const { user, prefs, seedVenues, seedArtists, seedArtistGenres, customSeedVenues, theme, setTheme } = useStore();
   const [editSection, setEditSection] = useState(null); // 'nights' | 'spots' | 'sound'
 
   const userVec = buildUserVector(seedArtists, seedArtistGenres, seedVenues);
@@ -349,6 +349,30 @@ export function ProfilePage() {
                 <Pencil size={11} /> Edit
               </button>
             </div>
+          </div>
+        </div>
+
+        <Divider />
+
+        {/* Appearance */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted px-1">Appearance</p>
+          <div className="glass rounded-2xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {theme === 'dark' ? <Moon size={16} className="text-brand-purple" /> : <Sun size={16} className="text-brand-amber" />}
+              <div>
+                <p className="text-sm font-medium">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</p>
+                <p className="text-xs text-muted">{theme === 'dark' ? 'Easy on the eyes at night' : 'Bright and clear'}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className={`relative w-12 h-6 rounded-full transition-colors duration-300 flex-shrink-0
+                ${theme === 'light' ? 'bg-brand-purple' : 'bg-white/15'}`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-300
+                ${theme === 'light' ? 'left-6' : 'left-0.5'}`} />
+            </button>
           </div>
         </div>
 

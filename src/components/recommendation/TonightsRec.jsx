@@ -118,7 +118,7 @@ function SongSearch({ value, onChange }) {
       </div>
 
       {open && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#13131f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-popup)] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-64 overflow-y-auto">
           {results.map(track => (
             <button
               key={track.id}
@@ -152,7 +152,7 @@ function SongSearch({ value, onChange }) {
       )}
 
       {open && searching && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#13131f] border border-white/10 rounded-2xl px-4 py-3 text-xs text-muted z-50">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-popup)] border border-white/10 rounded-2xl px-4 py-3 text-xs text-muted z-50">
           Searching Spotify…
         </div>
       )}

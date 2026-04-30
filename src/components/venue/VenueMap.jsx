@@ -25,11 +25,15 @@ function makePin(active, score = 75) {
   });
 }
 
-export function VenueMap({ venues, activeVenueId, onMarkerClick, scores = {} }) {
+const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+export function VenueMap({ venues, activeVenueId, onMarkerClick, scores = {}, theme = 'dark' }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
   const venuesRef = useRef({});
+  const tileRef = useRef(null);
 
   // Init map once
   useEffect(() => {
@@ -40,7 +44,7 @@ export function VenueMap({ venues, activeVenueId, onMarkerClick, scores = {} }) 
       zoomControl: false,
       attributionControl: false,
     });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(mapRef.current);
+    tileRef.current = L.tileLayer(TILE_DARK).addTo(mapRef.current);
 
     // Close active venue on map click
     mapRef.current.on('click', () => onMarkerClick(null));
@@ -95,6 +99,12 @@ export function VenueMap({ venues, activeVenueId, onMarkerClick, scores = {} }) 
       marker.setIcon(makePin(id === activeVenueId, scores[id] ?? 75));
     }
   }, [activeVenueId, scores]);
+
+  // Swap tile layer when theme changes
+  useEffect(() => {
+    if (!mapRef.current || !tileRef.current) return;
+    tileRef.current.setUrl(theme === 'light' ? TILE_LIGHT : TILE_DARK);
+  }, [theme]);
 
   return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />;
 }

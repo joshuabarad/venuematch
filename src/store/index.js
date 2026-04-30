@@ -9,6 +9,7 @@ export const useStore = create(
       user: null,
       onboardingStep: 0,
       onboardingComplete: false,
+      theme: 'dark',
       prefs: { nights: [], purposes: [], travel_radius: 'borough', neighborhoods: [] },
       seedVenues: [],          // curated venue IDs
       customSeedVenues: [],    // [{id, name, neighborhood, photo}] from Google Places
@@ -23,6 +24,7 @@ export const useStore = create(
       activeGroupId: null,
 
       setUser: (user) => set({ user }),
+      setTheme: (theme) => set({ theme }),
       setOnboardingStep: (step) => set({ onboardingStep: step }),
       completeOnboarding: () => set({ onboardingComplete: true, onboardingStep: 5 }),
       updatePrefs: (prefs) => set(s => ({ prefs: { ...s.prefs, ...prefs } })),

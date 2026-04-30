@@ -9,7 +9,7 @@ const TABS = [
 export function BottomNav({ active, onChange }) {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40">
-      <div className="absolute inset-0 bg-[#0a0a0f]/80 backdrop-blur-xl border-t border-white/5" />
+      <div className="absolute inset-0 bg-[var(--bg-base)]/80 backdrop-blur-xl border-t border-[var(--border-subtle)]" />
       <div className="relative flex items-center justify-around px-2 pb-2 pt-1">
         {TABS.map(tab => {
           const isActive = active === tab.id;

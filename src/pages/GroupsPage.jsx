@@ -62,7 +62,7 @@ function AddMemberModal({ onAdd, onClose }) {
   return (
     <div className="fixed inset-0 z-[3000] flex items-end justify-center sm:items-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-[#0d0d18] rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-md bg-[var(--bg-surface)] rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/5">
           <p className="font-semibold">Add member</p>
           <button onClick={onClose} className="w-7 h-7 rounded-full glass flex items-center justify-center text-muted">
@@ -132,7 +132,7 @@ function CreateGroupModal({ onClose }) {
   if (created) return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-[#0d0d18] rounded-3xl border border-white/10 p-8 shadow-2xl text-center space-y-5">
+      <div className="relative w-full max-w-sm bg-[var(--bg-surface)] rounded-3xl border border-white/10 p-8 shadow-2xl text-center space-y-5">
         <div className="w-14 h-14 rounded-2xl bg-brand-purple/20 border border-brand-purple/30 flex items-center justify-center mx-auto">
           <Users size={22} className="text-brand-purple" />
         </div>
@@ -157,7 +157,7 @@ function CreateGroupModal({ onClose }) {
   return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-[#0d0d18] rounded-3xl border border-white/10 p-8 shadow-2xl space-y-5">
+      <div className="relative w-full max-w-sm bg-[var(--bg-surface)] rounded-3xl border border-white/10 p-8 shadow-2xl space-y-5">
         <div className="flex items-center justify-between">
           <p className="font-semibold">New group</p>
           <button onClick={onClose} className="w-7 h-7 rounded-full glass flex items-center justify-center text-muted">
@@ -205,7 +205,7 @@ function JoinGroupModal({ onClose }) {
   return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-[#0d0d18] rounded-3xl border border-white/10 p-8 shadow-2xl space-y-5">
+      <div className="relative w-full max-w-sm bg-[var(--bg-surface)] rounded-3xl border border-white/10 p-8 shadow-2xl space-y-5">
         <div className="flex items-center justify-between">
           <p className="font-semibold">Join a group</p>
           <button onClick={onClose} className="w-7 h-7 rounded-full glass flex items-center justify-center text-muted">

@@ -46,7 +46,7 @@ function GenreDropdown({ value, onChange }) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-2 w-52 bg-[#13131f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+        <div className="absolute top-full left-0 mt-2 w-52 bg-[var(--bg-popup)] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
           {GENRE_GROUPS.map(g => (
             <button
               key={g.id}
@@ -90,7 +90,7 @@ function GroupDropdown({ groups, value, onChange }) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-2 w-52 bg-[#13131f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+        <div className="absolute top-full left-0 mt-2 w-52 bg-[var(--bg-popup)] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
           <button
             onClick={() => { onChange(null); setOpen(false); }}
             className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left transition-all hover:bg-white/5 ${!value ? 'text-white' : 'text-soft'}`}
@@ -120,7 +120,7 @@ function GroupDropdown({ groups, value, onChange }) {
 }
 
 export function HomePage({ onViewVenue }) {
-  const { user, getMatchScore, groups, activeGroupId, setActiveGroup } = useStore();
+  const { user, getMatchScore, groups, activeGroupId, setActiveGroup, theme } = useStore();
   const [activeTab, setActiveTab] = useState('discover');
   const [genreFilter, setGenreFilter] = useState('all');
   const [neighborhoodFilter, setNeighborhoodFilter] = useState(null);
@@ -272,6 +272,7 @@ export function HomePage({ onViewVenue }) {
             <VenueMap
               venues={filtered}
               scores={scores}
+              theme={theme}
               activeVenueId={activeVenue?.id}
               onMarkerClick={(v) => { setActiveVenue(v); if (v) listRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
             />
@@ -336,7 +337,7 @@ export function HomePage({ onViewVenue }) {
       {showRec && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowRec(false)} />
-          <div className="relative w-full max-w-lg bg-[#0d0d18] rounded-3xl border border-white/10 px-8 py-8 max-h-[85dvh] overflow-y-auto shadow-2xl">
+          <div className="relative w-full max-w-lg bg-[var(--bg-surface)] rounded-3xl border border-white/10 px-8 py-8 max-h-[85dvh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2 text-brand-purple">
                 <Sparkles size={16} />
@@ -355,7 +356,7 @@ export function HomePage({ onViewVenue }) {
       {showProfile && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowProfile(false)} />
-          <div className="relative w-full max-w-lg bg-[#0d0d18] rounded-3xl border border-white/10 max-h-[85dvh] overflow-y-auto shadow-2xl">
+          <div className="relative w-full max-w-lg bg-[var(--bg-surface)] rounded-3xl border border-white/10 max-h-[85dvh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between px-8 pt-8 pb-4">
               <span className="text-base font-semibold">Profile</span>
               <button onClick={() => setShowProfile(false)} className="w-8 h-8 rounded-full glass flex items-center justify-center text-muted hover:text-white transition-all">

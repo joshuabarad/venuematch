@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from './store/index.js';
 import { Onboarding } from './components/onboarding/Onboarding.jsx';
 import { HomePage } from './pages/HomePage.jsx';
 import { VenueDetail } from './components/venue/VenueDetail.jsx';
 
 export default function App() {
-  const { onboardingComplete } = useStore();
+  const { onboardingComplete, theme } = useStore();
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('light', theme === 'light');
+  }, [theme]);
   const [selectedVenue, setSelectedVenue] = useState(null);
 
   if (!onboardingComplete) return <Onboarding />;

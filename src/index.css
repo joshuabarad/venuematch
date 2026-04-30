@@ -3,31 +3,92 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme variables ── */
+:root {
+  --bg-base:    #0a0a0f;
+  --bg-surface: #0d0d18;
+  --bg-popup:   #13131f;
+  --bg-drawer:  #0d0d1a;
+  --text-primary: #f0efe8;
+  --text-soft-val: 240,239,232;
+  --glass-bg:         rgba(255,255,255,0.05);
+  --glass-border:     rgba(255,255,255,0.08);
+  --glass-strong-bg:  rgba(255,255,255,0.08);
+  --glass-strong-bdr: rgba(255,255,255,0.12);
+  --text-muted-color: rgba(240,239,232,0.45);
+  --text-soft-color:  rgba(240,239,232,0.72);
+  --scrollbar-thumb:  rgba(255,255,255,0.10);
+  --range-track:      rgba(255,255,255,0.12);
+  --range-thumb-bdr:  rgba(255,255,255,0.20);
+  --border-subtle:    rgba(255,255,255,0.05);
+}
+
+html.light {
+  --bg-base:    #f5f4f1;
+  --bg-surface: #ffffff;
+  --bg-popup:   #f0eff8;
+  --bg-drawer:  #faf9f7;
+  --text-primary: #0f0f14;
+  --text-soft-val: 15,15,20;
+  --glass-bg:         rgba(0,0,0,0.04);
+  --glass-border:     rgba(0,0,0,0.08);
+  --glass-strong-bg:  rgba(0,0,0,0.07);
+  --glass-strong-bdr: rgba(0,0,0,0.12);
+  --text-muted-color: rgba(15,15,20,0.45);
+  --text-soft-color:  rgba(15,15,20,0.72);
+  --scrollbar-thumb:  rgba(0,0,0,0.15);
+  --range-track:      rgba(0,0,0,0.10);
+  --range-thumb-bdr:  rgba(0,0,0,0.12);
+  --border-subtle:    rgba(0,0,0,0.07);
+}
+
 * { -webkit-tap-highlight-color: transparent; }
 
 body {
-  background: #0a0a0f;
-  color: #f0efe8;
+  background: var(--bg-base);
+  color: var(--text-primary);
   min-height: 100dvh;
   overscroll-behavior: none;
+  transition: background 0.25s, color 0.25s;
 }
 
 @layer utilities {
-  .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
-  .glass-strong { background: rgba(255,255,255,0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.12); }
-  .text-muted { color: rgba(240,239,232,0.45); }
-  .text-soft  { color: rgba(240,239,232,0.72); }
+  .glass        { background: var(--glass-bg);        backdrop-filter: blur(12px); border: 1px solid var(--glass-border); }
+  .glass-strong { background: var(--glass-strong-bg); backdrop-filter: blur(20px); border: 1px solid var(--glass-strong-bdr); }
+  .text-muted   { color: var(--text-muted-color); }
+  .text-soft    { color: var(--text-soft-color); }
+  .border-subtle { border-color: var(--border-subtle); }
 }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
 
-input[type=range] { -webkit-appearance: none; width: 100%; height: 4px; background: rgba(255,255,255,0.12); border-radius: 2px; outline: none; }
-input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #534AB7; cursor: pointer; border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 0 12px rgba(83,74,183,0.6); }
+input[type=range] { -webkit-appearance: none; width: 100%; height: 4px; background: var(--range-track); border-radius: 2px; outline: none; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #534AB7; cursor: pointer; border: 2px solid var(--range-thumb-bdr); box-shadow: 0 0 12px rgba(83,74,183,0.6); }
 
-/* Leaflet dark-theme overrides */
-.leaflet-container { background: #0d0d18; font-family: inherit; }
+/* Light mode: invert white-opacity borders to dark-opacity so they remain visible */
+html.light .border-white\/5  { border-color: rgba(0,0,0,0.05) !important; }
+html.light .border-white\/8  { border-color: rgba(0,0,0,0.08) !important; }
+html.light .border-white\/10 { border-color: rgba(0,0,0,0.10) !important; }
+html.light .border-white\/15 { border-color: rgba(0,0,0,0.13) !important; }
+html.light .border-white\/20 { border-color: rgba(0,0,0,0.16) !important; }
+html.light .divide-white\/5 > * + * { border-color: rgba(0,0,0,0.05) !important; }
+
+/* Light mode: bg-white/5, bg-white/8, bg-white/10 used in cards → make them bg-black/4 etc */
+html.light .bg-white\/\[0\.03\] { background: rgba(0,0,0,0.02) !important; }
+html.light .bg-white\/\[0\.06\] { background: rgba(0,0,0,0.04) !important; }
+html.light .bg-white\/5  { background: rgba(0,0,0,0.04) !important; }
+html.light .bg-white\/8  { background: rgba(0,0,0,0.06) !important; }
+html.light .bg-white\/10 { background: rgba(0,0,0,0.08) !important; }
+html.light .hover\:bg-white\/5:hover  { background: rgba(0,0,0,0.04) !important; }
+html.light .hover\:bg-white\/8:hover  { background: rgba(0,0,0,0.06) !important; }
+html.light .hover\:bg-white\/10:hover { background: rgba(0,0,0,0.08) !important; }
+html.light .hover\:bg-white\/\[0\.08\]:hover { background: rgba(0,0,0,0.06) !important; }
+
+/* Leaflet overrides */
+.leaflet-container { background: var(--bg-surface); font-family: inherit; }
 .leaflet-attribution-flag { display: none !important; }
 .leaflet-control-attribution { display: none; }
 .leaflet-tile-pane { filter: brightness(0.92); }
+html.light .leaflet-tile-pane { filter: brightness(1); }
