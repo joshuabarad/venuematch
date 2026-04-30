@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { NYC_VENUES } from '../data/venues.js';
+import { buildUserVector, buildGroupVector, vectorMatchScore } from '../lib/vectorRec.js';
 
 export const useStore = create(
   persist(
@@ -106,34 +107,31 @@ export const useStore = create(
         const { groups } = get();
         const group = groups.find(g => g.id === groupId);
         if (!group || !group.members.length) return null;
-        const memberVectors = group.members.map(member => {
-          const seeded = NYC_VENUES.filter(v => (member.seedVenues || []).includes(v.id));
-          if (!seeded.length) return { music: 3, energy: 3, dance: 3, demo: 3 };
-          const avg = key => seeded.reduce((s, v) => s + v[key], 0) / seeded.length;
-          return { music: avg('music_score'), energy: avg('energy_score'), dance: avg('dance_score'), demo: avg('demo_score') };
-        });
-        const avg = key => memberVectors.reduce((s, v) => s + v[key], 0) / memberVectors.length;
-        return { music: avg('music'), energy: avg('energy'), dance: avg('dance'), demo: avg('demo') };
+        return buildGroupVector(group.members);
       },
 
+      // Returns a 16-dim preference vector for Claude / Tonight's Pick context
       getVibeVector: () => {
-        const { venueRatings, seedArtists, seedVenues, seedArtistGenres, customSeedVenues } = get();
-        const ratings = Object.values(venueRatings);
-        const ratedCount = ratings.length;
-        const avg = (key) => ratedCount > 0
-          ? ratings.reduce((s, r) => s + (r[key] || 3), 0) / ratedCount
-          : 3;
-        return { music: avg('music'), energy: avg('energy'), dance: avg('dance'), demo: avg('demo'), ratedCount, seedArtists, seedArtistGenres, seedVenues, customSeedVenues };
+        const { seedArtists, seedArtistGenres, seedVenues, customSeedVenues } = get();
+        return { seedArtists, seedArtistGenres, seedVenues, customSeedVenues };
+      },
+
+      // Returns the raw 16-dim float array for vector similarity
+      getVectorEmbedding: () => {
+        const { seedArtists } = get();
+        return buildUserVector(seedArtists);
       },
 
       getMatchScore: (venue) => {
-        const { activeGroupId, getGroupVibeVector, getVibeVector } = get();
-        const v = activeGroupId ? (getGroupVibeVector(activeGroupId) || getVibeVector()) : getVibeVector();
-        const dims = ['music_score', 'energy_score', 'dance_score', 'demo_score'];
-        const keys = ['music', 'energy', 'dance', 'demo'];
-        let score = 0;
-        dims.forEach((d, i) => { const u = v[keys[i]] || 3; score += 1 - Math.abs(u - venue[d]) / 5; });
-        return Math.round((score / dims.length) * 100);
+        const { activeGroupId, groups, seedArtists } = get();
+        let userVec;
+        if (activeGroupId) {
+          const group = groups.find(g => g.id === activeGroupId);
+          userVec = group ? buildGroupVector(group.members) : buildUserVector(seedArtists);
+        } else {
+          userVec = buildUserVector(seedArtists);
+        }
+        return vectorMatchScore(venue, userVec);
       },
     }),
     { name: 'venuematch-store', version: 1 }
