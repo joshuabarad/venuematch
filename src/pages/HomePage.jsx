@@ -123,7 +123,7 @@ export function HomePage({ onViewVenue }) {
   const { user, getMatchScore, groups, activeGroupId, setActiveGroup, theme } = useStore();
   const [activeTab, setActiveTab] = useState('discover');
   const [genreFilter, setGenreFilter] = useState('all');
-  const [neighborhoodFilter, setNeighborhoodFilter] = useState(null);
+  const [neighborhoodFilter, setNeighborhoodFilter] = useState([]); // array of selected neighborhoods
   const [showRec, setShowRec] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [venues, setVenues] = useState(NYC_VENUES);
@@ -145,12 +145,14 @@ export function HomePage({ onViewVenue }) {
 
   const filtered = useMemo(() => {
     let list = [...venues];
-    if (genreFilter !== 'all') {
+    // Genre filter only applies when no neighborhoods selected — neighborhood mode
+    // shows all venue types within the area rather than double-filtering
+    if (genreFilter !== 'all' && neighborhoodFilter.length === 0) {
       const keywords = GENRE_GROUPS.find(g => g.id === genreFilter)?.keywords || [];
       list = list.filter(v => v.music_genres.some(g => keywords.some(k => g.toLowerCase().includes(k))));
     }
-    if (neighborhoodFilter) {
-      list = list.filter(v => v.neighborhood === neighborhoodFilter);
+    if (neighborhoodFilter.length > 0) {
+      list = list.filter(v => neighborhoodFilter.includes(v.neighborhood));
     }
     return list.sort((a, b) => getMatchScore(b) - getMatchScore(a));
   }, [venues, genreFilter, neighborhoodFilter, getMatchScore]);
@@ -231,7 +233,11 @@ export function HomePage({ onViewVenue }) {
             </button>
           ))}
           {activeTab === 'discover' && (
-            <span className="ml-auto text-xs text-muted">{filtered.length} venues</span>
+            <span className="ml-auto text-xs text-muted">
+              {neighborhoodFilter.length > 0
+                ? `${filtered.length} in ${neighborhoodFilter.length === 1 ? neighborhoodFilter[0] : `${neighborhoodFilter.length} areas`}`
+                : `${filtered.length} venues`}
+            </span>
           )}
         </div>
 
@@ -239,26 +245,31 @@ export function HomePage({ onViewVenue }) {
         {activeTab === 'discover' && (
           <div className="flex items-center gap-2 px-8 pb-3 overflow-x-auto scrollbar-none">
             <button
-              onClick={() => setNeighborhoodFilter(null)}
+              onClick={() => setNeighborhoodFilter([])}
               className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all border
-                ${!neighborhoodFilter
+                ${neighborhoodFilter.length === 0
                   ? 'bg-white/10 text-white border-white/20'
                   : 'text-muted border-white/8 hover:text-soft'}`}
             >
               All areas
             </button>
-            {neighborhoods.map(n => (
-              <button
-                key={n}
-                onClick={() => setNeighborhoodFilter(f => f === n ? null : n)}
-                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all border
-                  ${neighborhoodFilter === n
-                    ? 'bg-brand-teal/20 text-brand-teal border-brand-teal/40'
-                    : 'text-muted border-white/8 hover:text-soft'}`}
-              >
-                {n}
-              </button>
-            ))}
+            {neighborhoods.map(n => {
+              const active = neighborhoodFilter.includes(n);
+              return (
+                <button
+                  key={n}
+                  onClick={() => setNeighborhoodFilter(f =>
+                    active ? f.filter(x => x !== n) : [...f, n]
+                  )}
+                  className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all border
+                    ${active
+                      ? 'bg-brand-teal/20 text-brand-teal border-brand-teal/40'
+                      : 'text-muted border-white/8 hover:text-soft'}`}
+                >
+                  {n}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
