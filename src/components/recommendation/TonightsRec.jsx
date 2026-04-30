@@ -176,7 +176,7 @@ const QUESTIONS = [
 
 export function TonightsRec({ onViewVenue, allVenues }) {
   const venues = allVenues?.length ? allVenues : NYC_VENUES;
-  const { user, getVibeVector, savedVenues, saveVenue, tonightsRec, setTonightsRec, lastRecDate, updateTonightAnswers } = useStore();
+  const { user, getVibeVector, savedVenues, saveVenue, tonightsRec, setTonightsRec, lastRecDate, updateTonightAnswers, rejectVenue, prefs, rejectedVenues } = useStore();
   const [phase, setPhase] = useState('questions');
   const [qSet] = useState(QUESTIONS[new Date().getDay() % QUESTIONS.length]);
   const [a1, setA1] = useState(null);
@@ -192,13 +192,14 @@ export function TonightsRec({ onViewVenue, allVenues }) {
     const answers = { q1: `${qSet.q1}: ${a1}`, q2: `${qSet.q2}: ${a2}`, currentSong: song ? `${song.name} by ${song.artist}` : '' };
     updateTonightAnswers(answers);
     try {
-      const rec = await getTonightsRec({ vibeVector: getVibeVector(), answers, venues, savedVenueIds: Object.keys(savedVenues) });
+      const rec = await getTonightsRec({ vibeVector: getVibeVector(), answers, venues, savedVenueIds: Object.keys(savedVenues), prefs, rejectedVenues });
       setTonightsRec(rec); setPhase('result');
     } catch { setError("Couldn't generate a rec right now."); setPhase('questions'); }
   }
   async function handleFeedback(action) {
     setFeedback(action);
     if (action === 'saved' && recVenue) saveVenue(recVenue.id, 'want_to_visit');
+    if (action === 'not_tonight' && recVenue) rejectVenue(recVenue);
     if (user) await saveDailyRecFeedback(user.id, tonightsRec?.venueId, action, tonightsRec?.matchScore);
   }
   if (phase === 'questions') return (

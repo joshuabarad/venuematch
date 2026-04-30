@@ -51,6 +51,9 @@ export function VenueCard({ venue, showMatch = true, onClick, compact = false })
           {venue.vibe_tags.slice(0, 3).map(tag => (
             <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-black/40 text-white/80 backdrop-blur-sm">{tag}</span>
           ))}
+          {venue.isOpenNow === true && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/80 text-white backdrop-blur-sm font-medium">Open tonight</span>
+          )}
         </div>
 
         <button onClick={handleSave}

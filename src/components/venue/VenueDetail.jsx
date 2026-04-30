@@ -1,9 +1,12 @@
+import { useEffect } from 'react';
 import { useStore } from '../../store/index.js';
 import { Button, MatchBadge, RatingSlider, Divider } from '../ui/index.jsx';
 import { MapPin, Music, Zap, Users, Heart, X, Clock, ArrowLeft } from 'lucide-react';
 
 export function VenueDetail({ venue, onClose }) {
-  const { savedVenues, saveVenue, unsaveVenue, venueRatings, setVenueRating, getMatchScore } = useStore();
+  const { savedVenues, saveVenue, unsaveVenue, venueRatings, setVenueRating, getMatchScore, trackVenueView } = useStore();
+
+  useEffect(() => { trackVenueView(venue.id); }, [venue.id]);
   const saved = savedVenues[venue.id];
   const rating = venueRatings[venue.id] || { music: 3, energy: 3, dance: 3, demo: 3 };
   const match = getMatchScore(venue);

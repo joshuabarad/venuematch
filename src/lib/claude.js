@@ -31,7 +31,7 @@ function enrichVector(vibeVector, seedProfile, ratedCount) {
   };
 }
 
-export async function getTonightsRec({ vibeVector, answers, venues, savedVenueIds }) {
+export async function getTonightsRec({ vibeVector, answers, venues, savedVenueIds, prefs, rejectedVenues }) {
   // Seed venues = taste DNA only — never candidates for recommendation
   const seedIds = new Set([
     ...(vibeVector.seedVenues || []),
@@ -42,8 +42,8 @@ export async function getTonightsRec({ vibeVector, answers, venues, savedVenueId
   const seedProfile = buildSeedProfile(seedVenueObjects);
   const enriched = enrichVector(vibeVector, seedProfile, vibeVector.ratedCount || 0);
 
-  // Discovery pool: only venues the user hasn't already picked
-  const discoveryPool = venues.filter(v => !seedIds.has(v.id));
+  // Discovery pool: only venues the user hasn't seeded, excluding closed venues (if we know they're closed)
+  const discoveryPool = venues.filter(v => !seedIds.has(v.id) && v.isOpenNow !== false);
 
   const topVenues = [...discoveryPool]
     .sort((a, b) => vibeScore(b, enriched) - vibeScore(a, enriched))
@@ -53,6 +53,8 @@ export async function getTonightsRec({ vibeVector, answers, venues, savedVenueId
       genres: v.music_genres, vibe_tags: v.vibe_tags.slice(0, 3),
       music: v.music_score, energy: v.energy_score,
       dance: v.dance_score, crowd: v.crowd_desc,
+      ...(v.editorialSummary ? { summary: v.editorialSummary } : {}),
+      ...(v.googleRating ? { googleRating: v.googleRating, reviews: v.reviewCount } : {}),
     }));
 
   // Seed venue names + custom Google Places venues as taste anchors for Claude
@@ -66,6 +68,19 @@ export async function getTonightsRec({ vibeVector, answers, venues, savedVenueId
     return genres?.length ? `${name} (${genres.slice(0, 3).join(', ')})` : name;
   }).join(', ') || 'not set';
 
+  // Recent rejection context (last 7 days)
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const recentRejections = Object.values(rejectedVenues || {}).filter(r => r.timestamp > sevenDaysAgo);
+  const rejectedGenres = [...new Set(recentRejections.flatMap(r => r.genres))];
+  const rejectedVibes = [...new Set(recentRejections.flatMap(r => r.vibe_tags))];
+  const rejectionContext = recentRejections.length
+    ? `Recently rejected (avoid recommending venues heavy in these): genres: ${rejectedGenres.join(', ')} | vibes: ${rejectedVibes.join(', ')}`
+    : 'No recent rejections';
+
+  // User purpose + neighborhood context
+  const purposes = (prefs?.purposes || []).join(', ') || 'not set';
+  const neighborhoods = (prefs?.neighborhoods || []).join(', ') || 'open to all';
+
   const prompt = `You are a NYC nightlife discovery engine. Your job is to recommend a venue the user will love but hasn't experienced yet — this is about expanding their world, not reminding them of their regulars.
 
 User's known favorites (DO NOT recommend these — use them only to understand their taste):
@@ -76,6 +91,9 @@ Taste DNA inferred from their seeds (scores out of 5):
 - Genre fingerprint: ${seedProfile?.genres?.join(', ') || 'varied'}
 - Vibe fingerprint: ${seedProfile?.vibes?.join(', ') || 'varied'}
 - Artist taste: ${seedArtistStr}
+- Tonight's goals: ${purposes}
+- Preferred neighborhoods: ${neighborhoods}
+- ${rejectionContext}
 
 Tonight's mood:
 - ${answers.q1}
@@ -86,6 +104,8 @@ ${JSON.stringify(topVenues, null, 1)}
 
 Rules:
 - Pick the ONE venue from the list above that best matches their taste DNA and tonight's mood
+- Avoid venues that share genres or vibes from the rejection context
+- If tonight's goals include 'dancing', weight dance score heavily; if 'low_key', prefer lower energy
 - Frame the rec as a discovery: why will this feel familiar enough to love, but fresh enough to be worth the trip?
 - The reason must cite something concrete (a genre, a vibe tag, a crowd detail, a neighborhood)
 - matchScore 70–98 reflecting genuine fit quality

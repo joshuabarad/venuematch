@@ -4,14 +4,14 @@ const SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
 let enrichedVenueCache = null;
 let enrichVenuePromise = null;
 
-async function fetchVenuePhoto(name, key) {
+async function fetchVenueData(name, key) {
   try {
     const r = await fetch(SEARCH_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': key,
-        'X-Goog-FieldMask': 'places.id,places.photos',
+        'X-Goog-FieldMask': 'places.id,places.photos,places.rating,places.userRatingCount,places.priceLevel,places.regularOpeningHours,places.editorialSummary',
       },
       body: JSON.stringify({
         textQuery: `${name} NYC nightlife`,
@@ -20,9 +20,18 @@ async function fetchVenuePhoto(name, key) {
       }),
     });
     const d = await r.json();
-    const photo = d.places?.[0]?.photos?.[0];
-    return photo ? `https://places.googleapis.com/v1/${photo.name}/media?maxHeightPx=200&key=${key}` : null;
-  } catch { return null; }
+    const place = d.places?.[0];
+    if (!place) return {};
+    const photo = place.photos?.[0];
+    return {
+      photo: photo ? `https://places.googleapis.com/v1/${photo.name}/media?maxHeightPx=200&key=${key}` : null,
+      googleRating: place.rating ?? null,
+      reviewCount: place.userRatingCount ?? 0,
+      priceLevel: place.priceLevel ?? null,
+      isOpenNow: place.regularOpeningHours?.openNow ?? null,
+      editorialSummary: place.editorialSummary?.text ?? null,
+    };
+  } catch { return {}; }
 }
 
 export async function enrichCuratedVenues(venues) {
@@ -32,8 +41,8 @@ export async function enrichCuratedVenues(venues) {
   if (!key) return venues;
   enrichVenuePromise = Promise.all(
     venues.map(async v => {
-      const photo = await fetchVenuePhoto(v.name, key);
-      return { ...v, photo: photo || null };
+      const data = await fetchVenueData(v.name, key);
+      return { ...v, ...data };
     })
   ).then(results => { enrichedVenueCache = results; return results; });
   return enrichVenuePromise;
