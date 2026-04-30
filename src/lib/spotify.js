@@ -1,3 +1,5 @@
+import { getArtistPreviewUrl, getTrackPreviewUrl } from './itunes.js';
+
 const BASE = 'https://api.spotify.com/v1';
 let _token = null;
 let _expiry = 0;
@@ -38,31 +40,33 @@ export async function searchArtists(query) {
 // Cache top-track previews so repeated hovers don't re-fetch
 const _trackCache = new Map();
 
-export async function getArtistTopTrack(spotifyId) {
-  if (!spotifyId) return null;
-  if (_trackCache.has(spotifyId)) return _trackCache.get(spotifyId);
+export async function getArtistTopTrack(spotifyId, artistName) {
+  if (!spotifyId && !artistName) return null;
+  const cacheKey = spotifyId || artistName;
+  if (_trackCache.has(cacheKey)) return _trackCache.get(cacheKey);
 
-  const token = await getToken();
-  if (!token) return null;
-  try {
-    const r = await fetch(
-      `${BASE}/artists/${spotifyId}/top-tracks?market=US`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const d = await r.json();
-    // Find the first track that actually has a preview
-    const track = (d.tracks || []).find(t => t.preview_url) || d.tracks?.[0] || null;
-    const result = track
-      ? {
-          id: track.id,
-          name: track.name,
-          preview_url: track.preview_url || null,
-          image: track.album?.images?.[1]?.url || track.album?.images?.[0]?.url || null,
-        }
-      : null;
-    _trackCache.set(spotifyId, result);
-    return result;
-  } catch { return null; }
+  // Get track metadata from Spotify, preview URL from iTunes
+  let trackName = null;
+  if (spotifyId) {
+    const token = await getToken();
+    if (token) {
+      try {
+        const r = await fetch(
+          `${BASE}/artists/${spotifyId}/top-tracks?market=US`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const d = await r.json();
+        const track = d.tracks?.[0] || null;
+        if (track) trackName = track.name;
+      } catch { /* fall through */ }
+    }
+  }
+
+  // Fetch preview from iTunes (Spotify removed preview_url in 2024)
+  const preview_url = await getArtistPreviewUrl(artistName || trackName || '');
+  const result = preview_url ? { preview_url } : null;
+  _trackCache.set(cacheKey, result);
+  return result;
 }
 
 export async function searchTracks(query) {
