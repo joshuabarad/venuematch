@@ -118,18 +118,18 @@ export const useStore = create(
 
       // Returns the raw 16-dim float array for vector similarity
       getVectorEmbedding: () => {
-        const { seedArtists } = get();
-        return buildUserVector(seedArtists);
+        const { seedArtists, seedArtistGenres, seedVenues } = get();
+        return buildUserVector(seedArtists, seedArtistGenres, seedVenues);
       },
 
       getMatchScore: (venue) => {
-        const { activeGroupId, groups, seedArtists } = get();
+        const { activeGroupId, groups, seedArtists, seedArtistGenres, seedVenues } = get();
         let userVec;
         if (activeGroupId) {
           const group = groups.find(g => g.id === activeGroupId);
-          userVec = group ? buildGroupVector(group.members) : buildUserVector(seedArtists);
+          userVec = group ? buildGroupVector(group.members) : buildUserVector(seedArtists, seedArtistGenres, seedVenues);
         } else {
-          userVec = buildUserVector(seedArtists);
+          userVec = buildUserVector(seedArtists, seedArtistGenres, seedVenues);
         }
         return vectorMatchScore(venue, userVec);
       },

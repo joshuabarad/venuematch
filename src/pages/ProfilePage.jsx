@@ -213,10 +213,10 @@ function SoundEditor() {
 // ── Main profile page ────────────────────────────────────────────────────────
 
 export function ProfilePage() {
-  const { user, prefs, seedVenues, seedArtists, customSeedVenues } = useStore();
+  const { user, prefs, seedVenues, seedArtists, seedArtistGenres, customSeedVenues } = useStore();
   const [editSection, setEditSection] = useState(null); // 'nights' | 'spots' | 'sound'
 
-  const userVec = buildUserVector(seedArtists);
+  const userVec = buildUserVector(seedArtists, seedArtistGenres, seedVenues);
 
   // Top 5 dimensions by value for the profile visualisation
   const topDims = VECTOR_DIMS
