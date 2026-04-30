@@ -86,6 +86,87 @@ function genresToVector(genres) {
 }
 
 /**
+ * Derive a 16-dim vector from a Google Places venue object.
+ * Uses place types, price level, hours, and name/summary keywords.
+ * Dims: music_curation, energy, dance, late_night, underground, electronic,
+ *       rnb_hiphop, jazz_world, live_music, queer, intimate, outdoor,
+ *       exclusive, chill, diverse, local
+ */
+export function placesToVector(place) {
+  const vec = new Array(16).fill(0.3);
+  const types = place.types || [];
+  const text = [
+    place.name || '',
+    place.editorialSummary?.text || '',
+    place.primaryTypeDisplayName?.text || '',
+    (place.vibe_tags || []).join(' '),
+  ].join(' ').toLowerCase();
+
+  const isClub   = types.includes('night_club') || /nightclub|dance club/.test(text);
+  const isBar    = types.includes('bar') || /\bbar\b/.test(text);
+  const isLive   = types.includes('concert_hall') || types.includes('music_venue') || /live music|concert|band/.test(text);
+  const isLounge = /lounge|speakeasy|supper club/.test(text);
+
+  // 0 music_curation
+  vec[0] = /jazz|classical|curated|underground|experimental/.test(text) ? 0.88
+         : isLive ? 0.78 : isClub ? 0.72 : 0.52;
+
+  // 1 energy
+  vec[1] = isClub ? 0.85 : isBar && /dive|punk|rock/.test(text) ? 0.65 : isLounge ? 0.40 : 0.50;
+
+  // 2 dance
+  vec[2] = isClub || /danc|floor/.test(text) ? 0.82 : isBar ? 0.35 : 0.25;
+
+  // 3 late_night — infer from hours data if present
+  const periods = place.regularOpeningHours?.periods || [];
+  const closesLate = periods.some(p => {
+    const t = p.close?.time ? parseInt(p.close.time, 10) : null;
+    return t !== null && (t >= 200 && t <= 600);
+  });
+  vec[3] = closesLate ? 0.88 : isClub ? 0.70 : isBar ? 0.50 : 0.25;
+
+  // 4 underground
+  vec[4] = /underground|basement|no.frills|dive/.test(text) ? 0.78 : isClub ? 0.48 : 0.22;
+
+  // 5 electronic
+  vec[5] = /techno|house|edm|electronic|rave/.test(text) ? 0.88 : isClub ? 0.50 : 0.15;
+
+  // 6 rnb_hiphop
+  vec[6] = /r&b|hip.hop|rap|soul|funk/.test(text) ? 0.85 : 0.22;
+
+  // 7 jazz_world
+  vec[7] = /jazz|blues|world|global|afro|latin|bossa|salsa|cumbia/.test(text) ? 0.85 : 0.18;
+
+  // 8 live_music
+  vec[8] = isLive ? 0.88 : /acoustic|open mic|performer/.test(text) ? 0.60 : isClub ? 0.20 : 0.30;
+
+  // 9 queer
+  vec[9] = /queer|lgbtq|gay|lesbian|drag/.test(text) ? 0.85 : 0.12;
+
+  // 10 intimate
+  vec[10] = /intimate|cozy|small|tiny|underground/.test(text) ? 0.82 : isClub ? 0.22 : 0.55;
+
+  // 11 outdoor
+  vec[11] = /outdoor|garden|rooftop|patio|terrace/.test(text) ? 0.82 : 0.12;
+
+  // 12 exclusive  (price_level 0–4)
+  const priceLevel = place.priceLevel ?? 1;
+  vec[12] = [0.05, 0.12, 0.38, 0.68, 0.90][Math.min(priceLevel, 4)];
+
+  // 13 chill
+  vec[13] = isLounge || /chill|mellow|relaxed|wine/.test(text) ? 0.72
+           : isClub ? 0.18 : isBar ? 0.60 : 0.48;
+
+  // 14 diverse
+  vec[14] = /multicultural|diverse|international|caribbean|afro|latin/.test(text) ? 0.75 : 0.38;
+
+  // 15 local
+  vec[15] = /neighborhood|local|community|institution/.test(text) ? 0.78 : 0.38;
+
+  return vec;
+}
+
+/**
  * Build a user preference vector from seed artists + seed venues.
  *
  * Priority per artist:
@@ -93,21 +174,25 @@ function genresToVector(genres) {
  *   2. Genre-based vector derived from their Spotify genre tags
  *   3. Skipped (contributes nothing)
  *
- * Seed venue profiles are averaged in alongside artists so that
- * "Your spots" also shapes the recommendation vector.
+ * Static seed venue profiles and custom Google Places venues are both
+ * averaged in so "Your spots" fully shapes the recommendation vector.
  */
-export function buildUserVector(seedArtists = [], seedArtistGenres = {}, seedVenueIds = []) {
+export function buildUserVector(seedArtists = [], seedArtistGenres = {}, seedVenueIds = [], customVenues = []) {
   const artistVecs = seedArtists.map(name => {
     if (ARTIST_PROFILES[name]) return ARTIST_PROFILES[name];
     const genres = seedArtistGenres[name] || [];
     return genresToVector(genres);
   }).filter(Boolean);
 
-  const venueVecs = seedVenueIds
+  const staticVenueVecs = seedVenueIds
     .map(id => VENUE_PROFILES[id]?.vec)
     .filter(Boolean);
 
-  const allVecs = [...artistVecs, ...venueVecs];
+  const customVenueVecs = customVenues
+    .map(v => placesToVector(v))
+    .filter(Boolean);
+
+  const allVecs = [...artistVecs, ...staticVenueVecs, ...customVenueVecs];
   if (!allVecs.length) return new Array(16).fill(0.5);
   return averageVectors(allVecs);
 }

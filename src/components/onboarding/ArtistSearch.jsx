@@ -195,12 +195,25 @@ export function ArtistSearch({ selected, onToggle, maxSelected = 5, prefs, rankF
     !selected.includes(query) && !customNames.has(query.toLowerCase()) &&
     selected.length < maxSelected && bestScore < 0.75;
 
-  function handleCustomAdd() {
+  async function handleCustomAdd() {
     const name = query.trim();
     if (!name) return;
-    const artist = { id: `custom-${name}`, name, genres: [], source: 'custom' };
+    // Try to resolve genres from Spotify before falling back to empty
+    let genres = [];
+    let spotifyId = null;
+    let image = null;
+    const candidates = spotifyResults.length > 0
+      ? spotifyResults
+      : await searchArtists(name).catch(() => []);
+    const best = candidates.find(a => fuzzyScore(name, a.name) >= 0.5) || candidates[0];
+    if (best) {
+      genres = best.genres || [];
+      spotifyId = best.id;
+      image = best.image || null;
+    }
+    const artist = { id: spotifyId || `custom-${name}`, name, genres, image, source: 'custom' };
     setCustomArtists(prev => [...prev.filter(a => a.name.toLowerCase() !== name.toLowerCase()), artist]);
-    onToggle(name, []);
+    onToggle(name, genres);
     setQuery('');
     setJustAdded(name);
     setTimeout(() => setJustAdded(null), 2000);

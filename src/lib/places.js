@@ -21,7 +21,7 @@ async function fetchVenuePhoto(name, key) {
     });
     const d = await r.json();
     const photo = d.places?.[0]?.photos?.[0];
-    return photo ? `https://places.googleapis.com/v1/${photo.name}/media?maxHeightPx=200&key=${key}` : null;
+    return photo ? `https://places.googleapis.com/v1/${photo.name}/media?maxHeightPx=800&key=${key}` : null;
   } catch { return null; }
 }
 
@@ -58,7 +58,7 @@ export async function searchVenues(query) {
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': key,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.shortFormattedAddress,places.addressComponents,places.photos,places.primaryTypeDisplayName,places.types',
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.shortFormattedAddress,places.addressComponents,places.photos,places.primaryTypeDisplayName,places.types,places.priceLevel,places.regularOpeningHours,places.editorialSummary,places.rating',
       },
       body: JSON.stringify({
         textQuery: `${query} bar club venue NYC`,
@@ -86,8 +86,13 @@ export async function searchVenues(query) {
         neighborhood,
         address: p.shortFormattedAddress || '',
         type: p.primaryTypeDisplayName?.text || null,
+        types: p.types || [],
+        priceLevel: p.priceLevel ?? null,
+        regularOpeningHours: p.regularOpeningHours || null,
+        editorialSummary: p.editorialSummary || null,
+        rating: p.rating || null,
         photo: p.photos?.[0]
-          ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxHeightPx=200&key=${key}`
+          ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxHeightPx=800&key=${key}`
           : null,
         source: 'google',
       };
