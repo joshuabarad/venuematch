@@ -60,8 +60,7 @@ function ArtistCard({ artist, isSelected, disabled, isJustAdded, onToggle }) {
     // Small delay so quick passes don't trigger fetches
     hoverTimer.current = setTimeout(async () => {
       const spotifyId = artist.id?.startsWith('custom-') ? null : (artist.spotifyId || artist.id);
-      if (!spotifyId) return;
-      const track = await getArtistTopTrack(spotifyId);
+      const track = await getArtistTopTrack(spotifyId, artist.name);
       if (track?.preview_url) {
         audioPreview.play(track.preview_url);
         setPlaying(true);

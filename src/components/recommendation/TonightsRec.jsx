@@ -4,6 +4,7 @@ import { NYC_VENUES } from '../../data/venues.js';
 import { getTonightsRec } from '../../lib/claude.js';
 import { saveDailyRecFeedback } from '../../lib/supabase.js';
 import { searchTracks } from '../../lib/spotify.js';
+import { getTrackPreviewUrl } from '../../lib/itunes.js';
 import { audioPreview } from '../../lib/audio.js';
 import { MatchBadge } from '../ui/index.jsx';
 import { MapPin, Music, Zap, Heart, RefreshCw, ChevronRight, ThumbsDown, Check, Search, X, Volume2 } from 'lucide-react';
@@ -62,8 +63,9 @@ function SongSearch({ value, onChange }) {
   function handleTrackHoverEnter(track) {
     setHoveredId(track.id);
     clearTimeout(hoverTimer.current);
-    hoverTimer.current = setTimeout(() => {
-      if (track.preview_url) audioPreview.play(track.preview_url);
+    hoverTimer.current = setTimeout(async () => {
+      const url = await getTrackPreviewUrl(track.name, track.artist);
+      if (url) audioPreview.play(url);
     }, 400);
   }
 
@@ -139,7 +141,7 @@ function SongSearch({ value, onChange }) {
                 <p className="text-sm text-white truncate">{track.name}</p>
                 <p className="text-xs text-muted truncate">{track.artist}</p>
               </div>
-              {hoveredId === track.id && track.preview_url && (
+              {hoveredId === track.id && (
                 <div className="flex items-center gap-0.5 flex-shrink-0">
                   {[0, 150, 300].map(delay => (
                     <span key={delay} className="inline-block w-0.5 h-3 bg-emerald-400 rounded-full animate-bounce"
