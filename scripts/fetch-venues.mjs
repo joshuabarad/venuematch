@@ -7,10 +7,10 @@
  * Output: data/venues-raw.csv
  *
  * Required env vars:
- *   GOOGLE_PLACES_KEY — Google Places API key (same one used in the app)
+ *   VITE_GOOGLE_PLACES_KEY — already in your .env, no extra key needed
  *
  * Usage:
- *   GOOGLE_PLACES_KEY=xxx node scripts/fetch-venues.mjs
+ *   node --env-file=.env scripts/fetch-venues.mjs
  *
  * Rate limits:
  *   Google Places Text Search: 1 req/s keeps well under quota
@@ -21,8 +21,8 @@ import { writeFileSync } from 'fs';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const GOOGLE_KEY = process.env.GOOGLE_PLACES_KEY;
-if (!GOOGLE_KEY) { console.error('Missing GOOGLE_PLACES_KEY'); process.exit(1); }
+const GOOGLE_KEY = process.env.VITE_GOOGLE_PLACES_KEY;
+if (!GOOGLE_KEY) { console.error('Missing VITE_GOOGLE_PLACES_KEY — run with: node --env-file=.env scripts/fetch-venues.mjs'); process.exit(1); }
 
 const PLACES_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
 const PLACES_DETAIL_URL = 'https://places.googleapis.com/v1/places';
