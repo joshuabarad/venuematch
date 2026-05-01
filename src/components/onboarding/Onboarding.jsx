@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../store/index.js';
-import { Button, Pill, ProgressBar, SectionHeader, RatingSlider } from '../ui/index.jsx';
+import { Button, Pill, ProgressBar, SectionHeader, LabeledSlider, GenreMultiSelect, ProductionPicker } from '../ui/index';
 import { VenueCardSelectable } from '../venue/VenueCard.jsx';
 import { ArtistSearch } from './ArtistSearch.jsx';
 import { VenueSearch } from './VenueSearch.jsx';
@@ -298,11 +298,23 @@ function StepRateVenues({ onNext, onBack }) {
           <div className="flex items-center gap-1 text-white/60 text-xs mt-0.5"><MapPin size={10} /><span>{venue.neighborhood}</span></div>
         </div>
       </div>
-      <div className="glass rounded-2xl p-5 space-y-7">
-        <RatingSlider label="Music & sound" emoji="🎵" value={rating.music} onChange={v => setVenueRating(venue.id, 'music', v)} />
-        <RatingSlider label="Crowd energy" emoji="⚡" value={rating.energy} onChange={v => setVenueRating(venue.id, 'energy', v)} />
-        <RatingSlider label="Danceability" emoji="🕺" value={rating.dance} onChange={v => setVenueRating(venue.id, 'dance', v)} />
-        <RatingSlider label="Crowd match" emoji="👥" value={rating.demo} onChange={v => setVenueRating(venue.id, 'demo', v)} />
+      <div className="glass rounded-2xl p-5 space-y-6">
+        <LabeledSlider label="Vibe" emoji="✨"
+          value={rating.vibe ?? 3} onChange={v => setVenueRating(venue.id, 'vibe', v)}
+          stops={['Cocktail lounge', 'Dive bar', 'Sports / rooftop', 'Dance spot', 'Club']} />
+        <LabeledSlider label="Crowdedness" emoji="👥"
+          value={rating.crowdedness ?? 3} onChange={v => setVenueRating(venue.id, 'crowdedness', v)}
+          stops={['Ghost town', 'Few heads', 'Just right', 'Social', 'I have to go']} />
+        <LabeledSlider label="Music" emoji="🎵"
+          value={rating.music ?? 3} onChange={v => setVenueRating(venue.id, 'music', v)}
+          stops={['What music?', 'Background noise', 'Needed this', "Bumpin'", 'Focal point']} />
+        <GenreMultiSelect label="Genres" emoji="🎧"
+          value={rating.genres ?? []} onChange={v => setVenueRating(venue.id, 'genres', v)} />
+        <ProductionPicker label="Production type" emoji="🎛️"
+          value={rating.production ?? null} onChange={v => setVenueRating(venue.id, 'production', v)} />
+        <LabeledSlider label="Price" emoji="💸"
+          value={rating.price ?? 2} onChange={v => setVenueRating(venue.id, 'price', v)}
+          stops={['What a steal', 'Normal', 'Break the bank']} min={1} />
       </div>
       <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/90 to-transparent">
         <div className="flex gap-3 max-w-md mx-auto">

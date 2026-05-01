@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../store/index.js';
 import { NYC_VENUES, NEIGHBORHOODS, NIGHT_TYPES } from '../data/venues.js';
-import { SectionHeader, Divider, Pill } from '../components/ui/index.jsx';
+import { SectionHeader, Divider, Pill } from '../components/ui/index';
 import { ArtistSearch } from '../components/onboarding/ArtistSearch.jsx';
 import { VenueSearch } from '../components/onboarding/VenueSearch.jsx';
 import { enrichCuratedVenues } from '../lib/places.js';
@@ -349,6 +349,41 @@ export function ProfilePage() {
                 <Pencil size={11} /> Edit
               </button>
             </div>
+          </div>
+        </div>
+
+        <Divider />
+
+        {/* Vibe preferences — binary toggles */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted px-1">Vibe preferences</p>
+          <div className="glass rounded-2xl p-4 space-y-4">
+            {[
+              { id: 'queer_friendly', label: 'Queer-friendly spaces',    sub: 'Prioritize LGBTQ+ welcoming venues',    emoji: '🏳️‍🌈' },
+              { id: 'outdoor',        label: 'Outdoor / rooftop',         sub: 'Rooftops, patios, gardens',              emoji: '🌙' },
+              { id: 'late_night',     label: 'Late night (past 2am)',     sub: 'Only show venues open late',             emoji: '🌃' },
+            ].map(({ id, label, sub, emoji }) => {
+              const on = prefs.vibe_prefs?.[id] ?? false;
+              return (
+                <div key={id} className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="text-base flex-shrink-0">{emoji}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-tight">{label}</p>
+                      <p className="text-xs text-muted truncate">{sub}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => updatePrefs({ vibe_prefs: { ...(prefs.vibe_prefs || {}), [id]: !on } })}
+                    className={`relative w-11 h-6 rounded-full transition-colors duration-250 flex-shrink-0
+                      ${on ? 'bg-brand-purple' : 'bg-white/15'}`}
+                  >
+                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-250
+                      ${on ? 'left-5' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
 

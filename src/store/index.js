@@ -10,7 +10,7 @@ export const useStore = create(
       onboardingStep: 0,
       onboardingComplete: false,
       theme: 'dark',
-      prefs: { nights: [], purposes: [], travel_radius: 'borough', neighborhoods: [] },
+      prefs: { nights: [], purposes: [], travel_radius: 'borough', neighborhoods: [], vibe_prefs: { queer_friendly: false, outdoor: false, late_night: false } },
       seedVenues: [],          // curated venue IDs
       customSeedVenues: [],    // [{id, name, neighborhood, photo}] from Google Places
       seedArtists: [],         // array of name strings (for compatibility)
@@ -59,7 +59,10 @@ export const useStore = create(
       setVenueRating: (venueId, dim, val) => set(s => ({
         venueRatings: {
           ...s.venueRatings,
-          [venueId]: { ...(s.venueRatings[venueId] || { music: 3, energy: 3, dance: 3, demo: 3 }), [dim]: val }
+          [venueId]: {
+            ...(s.venueRatings[venueId] || { vibe: 3, crowdedness: 3, music: 3, genres: [], production: null, price: 2 }),
+            [dim]: val,
+          },
         }
       })),
 

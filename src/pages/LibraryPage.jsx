@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../store/index.js';
 import { NYC_VENUES } from '../data/venues.js';
 import { VenueCard } from '../components/venue/VenueCard.jsx';
-import { SectionHeader } from '../components/ui/index.jsx';
+import { SectionHeader } from '../components/ui/index';
 import { BookMarked, CheckCircle2, Compass } from 'lucide-react';
 
 const TABS = [

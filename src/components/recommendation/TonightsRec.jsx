@@ -6,7 +6,7 @@ import { saveDailyRecFeedback } from '../../lib/supabase.js';
 import { searchTracks } from '../../lib/spotify.js';
 import { getTrackPreviewUrl } from '../../lib/itunes.js';
 import { audioPreview } from '../../lib/audio.js';
-import { MatchBadge } from '../ui/index.jsx';
+import { MatchBadge } from '../ui/index';
 import { MapPin, Music, Zap, Heart, RefreshCw, ChevronRight, ThumbsDown, Check, Search, X, Volume2 } from 'lucide-react';
 
 function SongSearch({ value, onChange }) {

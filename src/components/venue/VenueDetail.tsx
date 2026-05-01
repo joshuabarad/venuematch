@@ -1,5 +1,5 @@
 import { useStore } from '../../store/index.js';
-import { Button, MatchBadge, RatingSlider, Divider } from '../ui/index.jsx';
+import { Button, MatchBadge, LabeledSlider, GenreMultiSelect, ProductionPicker, Divider } from '../ui/index';
 import { MapPin, Music, Clock, Heart, ArrowLeft } from 'lucide-react';
 import { buildUserVector, cosineSimilarity } from '../../lib/vectorRec.js';
 import { VENUE_PROFILES, VECTOR_DIMS } from '../../data/venueProfiles.js';
@@ -145,15 +145,23 @@ export function VenueDetail({ venue, onClose }) {
         {/* Rate this venue */}
         <div>
           <p className="text-xs text-muted mb-4 uppercase tracking-widest font-semibold">Rate your experience</p>
-          <div className="glass rounded-2xl p-5 space-y-5">
-            <RatingSlider label="Music & sound" emoji="🎵" value={rating.music}
-              onChange={v => setVenueRating(venue.id, 'music', v)} />
-            <RatingSlider label="Crowd energy" emoji="⚡" value={rating.energy}
-              onChange={v => setVenueRating(venue.id, 'energy', v)} />
-            <RatingSlider label="Danceability" emoji="🕺" value={rating.dance}
-              onChange={v => setVenueRating(venue.id, 'dance', v)} />
-            <RatingSlider label="Crowd match" emoji="👥" value={rating.demo}
-              onChange={v => setVenueRating(venue.id, 'demo', v)} />
+          <div className="glass rounded-2xl p-5 space-y-6">
+            <LabeledSlider label="Vibe" emoji="✨"
+              value={rating.vibe ?? 3} onChange={v => setVenueRating(venue.id, 'vibe', v)}
+              stops={['Cocktail lounge', 'Dive bar', 'Sports / rooftop', 'Dance spot', 'Club']} />
+            <LabeledSlider label="Crowdedness" emoji="👥"
+              value={rating.crowdedness ?? 3} onChange={v => setVenueRating(venue.id, 'crowdedness', v)}
+              stops={['Ghost town', 'Few heads', 'Just right', 'Social', 'I have to go']} />
+            <LabeledSlider label="Music" emoji="🎵"
+              value={rating.music ?? 3} onChange={v => setVenueRating(venue.id, 'music', v)}
+              stops={['What music?', 'Background noise', 'Needed this', "Bumpin'", 'Focal point']} />
+            <GenreMultiSelect label="Genres" emoji="🎧"
+              value={rating.genres ?? []} onChange={v => setVenueRating(venue.id, 'genres', v)} />
+            <ProductionPicker label="Production type" emoji="🎛️"
+              value={rating.production ?? null} onChange={v => setVenueRating(venue.id, 'production', v)} />
+            <LabeledSlider label="Price" emoji="💸"
+              value={rating.price ?? 2} onChange={v => setVenueRating(venue.id, 'price', v)}
+              stops={['What a steal', 'Normal', 'Break the bank']} min={1} />
           </div>
         </div>
       </div>

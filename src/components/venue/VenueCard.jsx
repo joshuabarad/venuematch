@@ -1,5 +1,5 @@
 import { Heart, MapPin, Music } from 'lucide-react';
-import { MatchBadge } from '../ui/index.jsx';
+import { MatchBadge } from '../ui/index';
 import { useStore } from '../../store/index.js';
 
 export function VenueCard({ venue, showMatch = true, onClick, compact = false }) {

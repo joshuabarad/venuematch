@@ -6,7 +6,7 @@ import { VenueCard } from '../components/venue/VenueCard.jsx';
 import { VenueMap } from '../components/venue/VenueMap.jsx';
 import { TonightsRec } from '../components/recommendation/TonightsRec.jsx';
 import { LibraryPage } from './LibraryPage.jsx';
-import { ProfilePage } from './ProfilePage.jsx';
+import { ProfilePage } from './ProfilePage';
 import { GroupsPage } from './GroupsPage.jsx';
 import { Sparkles, MapPin, Music, X, ChevronDown, Check, Users } from 'lucide-react';
 

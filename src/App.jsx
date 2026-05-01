@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useStore } from './store/index.js';
 import { Onboarding } from './components/onboarding/Onboarding.jsx';
 import { HomePage } from './pages/HomePage.jsx';
-import { VenueDetail } from './components/venue/VenueDetail.jsx';
+import { VenueDetail } from './components/venue/VenueDetail';
 
 export default function App() {
   const { onboardingComplete, theme } = useStore();
