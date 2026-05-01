@@ -1,0 +1,410 @@
+/* Flare feature styles — scoped under .flare-root to avoid colliding with venuematch globals */
+
+.flare-root {
+  color: #17211c;
+  background: #f4f1e8;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  min-height: 100dvh;
+}
+
+.flare-root * {
+  box-sizing: border-box;
+}
+
+.flare-root button,
+.flare-root input,
+.flare-root select,
+.flare-root textarea {
+  font: inherit;
+  cursor: pointer;
+}
+
+.flare-root .app-shell {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(260px, 330px);
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.flare-root .left-panel,
+.flare-root .right-panel {
+  background: rgba(255, 252, 244, 0.92);
+  border-color: rgba(23, 33, 28, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 22px;
+  position: relative;
+  z-index: 3;
+}
+
+.flare-root .left-panel  { border-right: 1px solid rgba(23, 33, 28, 0.1); }
+.flare-root .right-panel { border-left:  1px solid rgba(23, 33, 28, 0.1); }
+
+.flare-root .brand-row { align-items: center; display: flex; gap: 12px; }
+
+.flare-root .brand-mark,
+.flare-root .icon-button,
+.flare-root .avatar,
+.flare-root .detail-avatar { align-items: center; display: inline-flex; justify-content: center; }
+
+.flare-root .brand-mark {
+  background: #17211c; border-radius: 8px; color: #ffb067; height: 42px; width: 42px;
+}
+
+.flare-root h1 { font-size: 22px; letter-spacing: 0; line-height: 1; margin: 0; }
+.flare-root h2 { font-size: 28px; letter-spacing: 0; line-height: 1.05; margin: 0; }
+.flare-root h3 { font-size: 22px; letter-spacing: 0; line-height: 1.1;  margin: 0; }
+.flare-root p  { margin: 0; }
+
+.flare-root .brand-row p,
+.flare-root small,
+.flare-root .eyebrow,
+.flare-root .mini-card p,
+.flare-root .flare-detail p { color: #68736a; }
+
+.flare-root .eyebrow {
+  font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+.flare-root .search-box {
+  align-items: center; background: #ffffff;
+  border: 1px solid rgba(23, 33, 28, 0.12); border-radius: 8px;
+  display: flex; gap: 10px; min-height: 44px; padding: 0 12px;
+}
+.flare-root .search-box input { border: 0; outline: 0; width: 100%; }
+
+.flare-root .send-flare-button {
+  align-items: center; background: #e8590c; border: 0; border-radius: 8px;
+  color: #fffaf2; display: inline-flex; font-weight: 800; gap: 9px;
+  justify-content: center; min-height: 48px; padding: 0 16px;
+  box-shadow: 0 14px 28px rgba(232, 89, 12, 0.25);
+}
+
+.flare-root .panel-section       { display: flex; flex-direction: column; gap: 10px; }
+.flare-root .panel-section.flush { gap: 8px; }
+
+.flare-root .section-heading {
+  align-items: center; color: #3a453e; display: flex;
+  font-size: 13px; font-weight: 800; justify-content: space-between; text-transform: uppercase;
+}
+
+.flare-root .group-row,
+.flare-root .friend-row,
+.flare-root .notification {
+  align-items: center; background: #ffffff;
+  border: 1px solid rgba(23, 33, 28, 0.1); border-radius: 8px;
+  display: flex; gap: 10px; min-height: 58px; padding: 11px; text-align: left;
+}
+.flare-root .group-row { width: 100%; }
+.flare-root .group-row.selected {
+  border-color: rgba(232, 89, 12, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(232, 89, 12, 0.2);
+}
+.flare-root .group-row span,
+.flare-root .friend-row span { display: grid; gap: 3px; min-width: 0; }
+.flare-root .friend-row em {
+  color: #68736a; font-size: 12px; font-style: normal; margin-left: auto; white-space: nowrap;
+}
+
+.flare-root .avatar {
+  background: #e9efe8; border-radius: 50%; color: #17211c;
+  flex: 0 0 auto; font-size: 12px; font-weight: 900; height: 34px; width: 34px;
+}
+
+.flare-root .map-stage {
+  background: radial-gradient(circle at 20% 18%, rgba(255,176,103,0.24), transparent 26%),
+    linear-gradient(135deg, #f7f4ea 0%, #e8efe7 48%, #e9edf5 100%);
+  display: flex; flex-direction: column; min-width: 0; overflow: hidden; padding: 24px; position: relative;
+}
+
+.flare-root .map-topbar {
+  align-items: center; display: flex; justify-content: space-between; position: relative; z-index: 2;
+}
+
+.flare-root .icon-button {
+  background: #ffffff; border: 1px solid rgba(23, 33, 28, 0.12);
+  border-radius: 8px; color: #17211c; height: 42px; width: 42px;
+}
+
+.flare-root .mock-map {
+  flex: 1; margin: 18px 0 116px; min-height: 420px; overflow: hidden; position: relative;
+}
+
+.flare-root .street { background: rgba(255,255,255,0.78); border: 1px solid rgba(23,33,28,0.06); position: absolute; }
+.flare-root .street.horizontal { height: 38px; left: -8%; right: -8%; transform: rotate(-9deg); }
+.flare-root .street.horizontal.one   { top: 23%; }
+.flare-root .street.horizontal.two   { top: 52%; }
+.flare-root .street.horizontal.three { top: 74%; }
+.flare-root .street.vertical { bottom: -6%; top: -6%; transform: rotate(14deg); width: 40px; }
+.flare-root .street.vertical.one   { left: 24%; }
+.flare-root .street.vertical.two   { left: 52%; }
+.flare-root .street.vertical.three { left: 80%; }
+
+.flare-root .park-shape {
+  align-items: center; background: rgba(61,139,91,0.18); border: 1px solid rgba(61,139,91,0.22);
+  border-radius: 8px; color: #3d6c4c; display: flex; font-size: 13px; font-weight: 800;
+  height: 120px; justify-content: center; position: absolute;
+  right: 8%; top: 54%; width: 190px;
+}
+
+.flare-root .map-label {
+  color: rgba(23,33,28,0.46); font-size: 12px; font-weight: 800; position: absolute; text-transform: uppercase;
+}
+.flare-root .label-a { left: 18%; top: 18%; transform: rotate(-9deg); }
+.flare-root .label-b { left: 55%; top: 44%; transform: rotate(14deg); }
+.flare-root .label-c { left: 24%; top: 80%; transform: rotate(14deg); }
+
+.flare-root .you-pin {
+  background: #17211c; border: 5px solid #ffffff; border-radius: 50%;
+  box-shadow: 0 12px 30px rgba(23,33,28,0.24); height: 28px; left: 48%; position: absolute; top: 48%; width: 28px;
+}
+.flare-root .you-pin span {
+  background: rgba(23,33,28,0.18); border-radius: 50%; height: 54px; left: 50%; position: absolute;
+  top: 50%; transform: translate(-50%,-50%); width: 54px; z-index: -1;
+}
+
+.flare-root .flare-launch-layer { inset: 0; pointer-events: none; position: absolute; z-index: 4; }
+.flare-root .flare-launch {
+  --launch-delay: 0ms; --rise: -180px; --drift: 28px;
+  height: 1px; left: 50%; position: absolute; top: 50%; width: 1px;
+}
+
+.flare-root .launch-ground-glow,
+.flare-root .flare-rocket,
+.flare-root .flare-bloom,
+.flare-root .smoke-puff,
+.flare-root .ember { left: 0; position: absolute; top: 0; }
+
+.flare-root .launch-ground-glow {
+  animation: flare-ground-glow 2500ms ease-out var(--launch-delay) both;
+  background: radial-gradient(circle, color-mix(in srgb, var(--pin-color), white 25%) 0%, rgba(255,176,103,0.34) 34%, transparent 70%);
+  border-radius: 50%; height: 76px; transform: translate(-50%,-50%); width: 76px;
+}
+
+.flare-root .flare-rocket {
+  align-items: center;
+  animation: flare-rocket-flight 1900ms cubic-bezier(0.2,0.85,0.25,1) var(--launch-delay) both;
+  background: radial-gradient(circle at 35% 25%, #fff9d6 0%, #ffd166 34%, var(--pin-color) 74%);
+  border: 3px solid #fffaf2; border-radius: 999px;
+  box-shadow: 0 0 24px rgba(255,128,38,0.64), 0 10px 22px rgba(23,33,28,0.2);
+  color: #ffffff; display: inline-flex; height: 30px; justify-content: center;
+  transform: translate(-50%,-50%); width: 30px;
+}
+
+.flare-root .smoke-puff {
+  animation: flare-smoke-rise 2100ms ease-out var(--launch-delay) both;
+  background: radial-gradient(circle at 35% 30%, rgba(255,252,244,0.92), rgba(206,209,198,0.74) 58%, rgba(135,145,135,0) 72%);
+  border-radius: 50%; filter: blur(0.2px); height: 42px; opacity: 0; transform: translate(-50%,-50%); width: 42px;
+}
+.flare-root .puff-two   { animation-delay: calc(var(--launch-delay) + 180ms); height: 34px; width: 34px; }
+.flare-root .puff-three { animation-delay: calc(var(--launch-delay) + 360ms); height: 28px; width: 28px; }
+
+.flare-root .flare-bloom {
+  animation: flare-bloom-anim 1250ms ease-out calc(var(--launch-delay) + 1120ms) both;
+  background: radial-gradient(circle, rgba(255,250,214,0.96) 0 12%, rgba(255,209,102,0.78) 13% 28%, rgba(232,89,12,0.38) 38%, transparent 72%);
+  border-radius: 50%; height: 138px; opacity: 0;
+  transform: translate(-50%,-50%) translate(var(--drift),var(--rise)) scale(0.1); width: 138px;
+}
+.flare-root .flare-bloom span {
+  animation: flare-ring-anim 1250ms ease-out calc(var(--launch-delay) + 1120ms) both;
+  border: 2px solid rgba(255,250,214,0.74); border-radius: 50%; display: block; height: 100%; width: 100%;
+}
+
+.flare-root .ember {
+  animation: flare-ember-pop 1250ms ease-out calc(var(--launch-delay) + 1180ms) both;
+  background: #ffd166; border-radius: 50%; box-shadow: 0 0 10px rgba(255,128,38,0.66);
+  height: 7px; opacity: 0; transform: translate(-50%,-50%) translate(var(--drift),var(--rise)); width: 7px;
+}
+.flare-root .ember-one   { --ember-x: 54px;  --ember-y: -32px; }
+.flare-root .ember-two   { --ember-x: -48px; --ember-y:  24px; background: #ff922b; height: 6px; width: 6px; }
+.flare-root .ember-three { --ember-x:  18px; --ember-y:  54px; background: #fff3bf; height: 5px; width: 5px; }
+
+.flare-root .flare-pin {
+  align-items: center; background: var(--pin-color); border: 4px solid #ffffff; border-radius: 999px;
+  box-shadow: 0 16px 28px rgba(23,33,28,0.22); color: #ffffff; display: inline-flex; gap: 4px;
+  min-height: 44px; padding: 0 10px; position: absolute; transform: translate(-50%,-50%);
+  transition: transform 160ms ease, box-shadow 160ms ease; z-index: 5;
+}
+.flare-root .flare-pin.active {
+  box-shadow: 0 0 0 8px rgba(232,89,12,0.18), 0 18px 36px rgba(23,33,28,0.3);
+  transform: translate(-50%,-50%) scale(1.08);
+}
+.flare-root .flare-pin.recently-launched { animation: flare-pin-afterglow 2600ms ease-out both; }
+.flare-root .flare-pin span { font-size: 13px; font-weight: 900; }
+
+.flare-root .flare-detail {
+  background: rgba(255,252,244,0.96); border: 1px solid rgba(23,33,28,0.12); border-radius: 8px;
+  bottom: 24px; box-shadow: 0 18px 48px rgba(23,33,28,0.16);
+  left: 24px; padding: 18px; position: absolute; right: 24px; z-index: 4;
+}
+.flare-root .detail-main { align-items: start; display: flex; gap: 14px; }
+.flare-root .detail-avatar {
+  background: #17211c; border-radius: 8px; color: #fffaf2; flex: 0 0 auto;
+  font-size: 13px; font-weight: 900; height: 42px; width: 42px;
+}
+.flare-root .detail-meta,
+.flare-root .detail-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+.flare-root .detail-meta span {
+  align-items: center; background: #f3efe5; border-radius: 999px; color: #3a453e;
+  display: inline-flex; font-size: 13px; font-weight: 700; gap: 6px; min-height: 32px; padding: 0 10px;
+}
+.flare-root .detail-actions button {
+  align-items: center; background: #17211c; border: 0; border-radius: 8px;
+  color: #fffaf2; display: inline-flex; font-weight: 800; gap: 8px; min-height: 38px; padding: 0 13px;
+}
+.flare-root .detail-actions button + button {
+  background: #ffffff; border: 1px solid rgba(23,33,28,0.14); color: #17211c;
+}
+
+.flare-root .mini-card,
+.flare-root .message-preview {
+  background: #ffffff; border: 1px solid rgba(23,33,28,0.1); border-radius: 8px; padding: 14px;
+}
+.flare-root .tonight-card { display: grid; gap: 10px; }
+
+.flare-root .animation-lab {
+  background: #17211c; border-radius: 8px; color: #fffaf2; display: grid; gap: 12px; padding: 14px;
+}
+.flare-root .animation-lab .section-heading { color: #ffe8cc; }
+
+.flare-root .replay-button {
+  align-items: center; background: #e8590c; border: 0; border-radius: 8px;
+  color: #fffaf2; display: inline-flex; font-weight: 900; gap: 8px;
+  justify-content: center; min-height: 42px; width: 100%;
+}
+
+.flare-root .mode-grid { display: grid; gap: 6px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.flare-root .mode-grid button {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 7px;
+  color: #fffaf2; font-size: 12px; font-weight: 800; line-height: 1.1; min-height: 40px; padding: 0 6px;
+}
+.flare-root .mode-grid button.selected { background: #fffaf2; color: #17211c; }
+
+.flare-root .notification { color: #17211c; width: 100%; }
+.flare-root .notification.now  { border-color: rgba(232,89,12,0.28); }
+.flare-root .notification.soon { border-color: rgba(76,111,255,0.28); }
+.flare-root .notification span { font-size: 14px; font-weight: 700; }
+
+.flare-root .message-preview { background: #f3f6fb; display: grid; gap: 10px; }
+.flare-root .imessage-header {
+  align-items: center; color: #4a5665; display: flex; font-size: 13px; font-weight: 800; gap: 8px;
+}
+.flare-root .bubble {
+  align-self: start; background: #ffffff; border-radius: 16px 16px 16px 4px;
+  color: #2d3748; font-size: 14px; padding: 8px 12px; width: fit-content;
+}
+.flare-root .flare-message-card {
+  background: #ffffff; border: 1px solid rgba(23,33,28,0.1); border-radius: 8px;
+  display: grid; gap: 5px; padding: 12px; text-align: left;
+}
+.flare-root .message-card-title { color: #4c6fff; font-size: 13px; font-weight: 900; }
+.flare-root .message-actions {
+  border-top: 1px solid rgba(23,33,28,0.1); display: grid;
+  grid-template-columns: 1fr 1fr; margin-top: 8px; padding-top: 8px;
+}
+.flare-root .message-actions span { color: #4c6fff; font-size: 13px; font-weight: 900; text-align: center; }
+
+.flare-root .modal-backdrop {
+  align-items: center; background: rgba(23,33,28,0.36); display: flex;
+  inset: 0; justify-content: center; padding: 18px; position: fixed; z-index: 10;
+}
+.flare-root .composer {
+  background: #fffaf2; border-radius: 8px; box-shadow: 0 24px 80px rgba(23,33,28,0.32);
+  display: grid; gap: 16px; max-height: calc(100vh - 36px);
+  max-width: 560px; overflow: auto; padding: 22px; width: 100%;
+}
+.flare-root .composer-header { align-items: center; display: flex; justify-content: space-between; }
+.flare-root .composer label,
+.flare-root .composer fieldset {
+  border: 0; color: #3a453e; display: grid; font-size: 13px;
+  font-weight: 900; gap: 8px; margin: 0; padding: 0;
+}
+.flare-root .composer select,
+.flare-root .composer textarea {
+  background: #ffffff; border: 1px solid rgba(23,33,28,0.14);
+  border-radius: 8px; color: #17211c; min-height: 44px; padding: 10px 12px;
+}
+.flare-root .composer textarea  { min-height: 78px; resize: vertical; }
+.flare-root .composer legend    { margin-bottom: 8px; }
+
+.flare-root .segmented {
+  background: #efe9dc; border-radius: 8px; display: grid;
+  gap: 4px; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 4px;
+}
+.flare-root .segmented button {
+  background: transparent; border: 0; border-radius: 6px; color: #3a453e;
+  font-size: 13px; font-weight: 800; min-height: 38px; padding: 0 8px;
+}
+.flare-root .segmented button.selected { background: #ffffff; box-shadow: 0 4px 14px rgba(23,33,28,0.08); color: #17211c; }
+.flare-root .send-flare-button.create  { width: 100%; }
+
+/* Animations — prefixed to avoid collisions */
+@keyframes flare-ground-glow {
+  0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.25); }
+  12%  { opacity: 0.95; transform: translate(-50%,-50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%,-50%) scale(1.42); }
+}
+@keyframes flare-rocket-flight {
+  0%   { opacity: 0; transform: translate(-50%,-50%) translate(0,0) rotate(-10deg) scale(0.45); }
+  12%  { opacity: 1; }
+  74%  { opacity: 1; transform: translate(-50%,-50%) translate(calc(var(--drift)*0.72),calc(var(--rise)*0.78)) rotate(14deg) scale(1); }
+  100% { opacity: 0; transform: translate(-50%,-50%) translate(var(--drift),var(--rise)) rotate(24deg) scale(0.28); }
+}
+@keyframes flare-smoke-rise {
+  0%   { opacity: 0; transform: translate(-50%,-50%) translate(0,0) scale(0.2); }
+  18%  { opacity: 0.7; }
+  100% { opacity: 0; transform: translate(-50%,-50%) translate(calc(var(--drift)*0.35),calc(var(--rise)*0.58)) scale(1.8); }
+}
+@keyframes flare-bloom-anim {
+  0%   { opacity: 0; transform: translate(-50%,-50%) translate(var(--drift),var(--rise)) scale(0.1); }
+  24%  { opacity: 0.98; transform: translate(-50%,-50%) translate(var(--drift),var(--rise)) scale(0.78); }
+  100% { opacity: 0; transform: translate(-50%,-50%) translate(var(--drift),var(--rise)) scale(1.36); }
+}
+@keyframes flare-ring-anim {
+  0%   { opacity: 0.9; transform: scale(0.2); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+@keyframes flare-ember-pop {
+  0%   { opacity: 0; transform: translate(-50%,-50%) translate(var(--drift),var(--rise)) scale(0.2); }
+  18%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%,-50%) translate(calc(var(--drift) + var(--ember-x)),calc(var(--rise) + var(--ember-y))) scale(0.85); }
+}
+@keyframes flare-pin-afterglow {
+  0%,70% { filter: saturate(1.1); }
+  82%    { filter: saturate(1.35) brightness(1.12); box-shadow: 0 0 0 13px rgba(255,176,103,0.22),0 18px 36px rgba(23,33,28,0.3); }
+  100%   { filter: none; }
+}
+
+.flare-root .flare-launch-layer.reduced .flare-launch > :not(.launch-ground-glow):not(.flare-bloom) { display: none; }
+.flare-root .flare-launch-layer.reduced .launch-ground-glow,
+.flare-root .flare-launch-layer.reduced .flare-bloom {
+  animation-duration: 900ms; animation-delay: var(--launch-delay); transform: translate(-50%,-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flare-root .flare-rocket, .flare-root .smoke-puff, .flare-root .ember { display: none; }
+  .flare-root .launch-ground-glow, .flare-root .flare-bloom, .flare-root .flare-pin.recently-launched { animation-duration: 900ms; }
+}
+
+@media (max-width: 1080px) {
+  .flare-root .app-shell { grid-template-columns: 260px minmax(0, 1fr); }
+  .flare-root .right-panel { display: none; }
+}
+@media (max-width: 760px) {
+  .flare-root .app-shell { display: flex; flex-direction: column; min-height: auto; overflow: visible; }
+  .flare-root .left-panel { border-right: 0; padding: 16px; }
+  .flare-root .panel-section { display: none; }
+  .flare-root .map-stage { min-height: 680px; padding: 16px; }
+  .flare-root .mock-map { margin-bottom: 214px; min-height: 390px; }
+  .flare-root .map-topbar h2 { font-size: 24px; }
+  .flare-root .flare-detail { bottom: 16px; left: 16px; right: 16px; }
+  .flare-root .detail-meta span, .flare-root .detail-actions button { width: 100%; }
+  .flare-root .modal-backdrop { align-items: flex-start; padding: 10px; }
+  .flare-root .composer { gap: 10px; max-height: calc(100vh - 20px); padding: 16px; }
+  .flare-root .composer h2 { font-size: 25px; }
+  .flare-root .composer textarea { min-height: 62px; }
+  .flare-root .composer select, .flare-root .composer textarea { padding: 8px 10px; }
+  .flare-root .composer .segmented { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .flare-root .composer .segmented button { font-size: 12px; line-height: 1.15; min-height: 40px; overflow-wrap: anywhere; padding: 0 5px; }
+}

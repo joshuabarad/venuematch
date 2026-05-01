@@ -8,7 +8,8 @@ import { TonightsRec } from '../components/recommendation/TonightsRec.jsx';
 import { LibraryPage } from './LibraryPage.jsx';
 import { ProfilePage } from './ProfilePage.jsx';
 import { GroupsPage } from './GroupsPage.jsx';
-import { Sparkles, MapPin, Music, X, ChevronDown, Check, Users } from 'lucide-react';
+import { FlarePage } from './FlarePage';
+import { Sparkles, MapPin, Music, X, ChevronDown, Check, Users, Flame } from 'lucide-react';
 
 // Broad genre groups → which venue music_genre strings they match
 const GENRE_GROUPS = [
@@ -220,6 +221,7 @@ export function HomePage({ onViewVenue }) {
             { id: 'discover', label: 'Discover' },
             { id: 'library',  label: 'Library'  },
             { id: 'groups',   label: 'Groups'   },
+            { id: 'flare',    label: 'Flare'    },
           ].map(t => (
             <button
               key={t.id}
@@ -233,7 +235,8 @@ export function HomePage({ onViewVenue }) {
             </button>
           ))}
           {activeTab === 'discover' && (
-            <span className="ml-auto text-xs text-muted">
+            <span className="ml-auto text-xs text-muted flex items-center gap-1">
+              {activeTab === 'flare' && <Flame size={12} className="text-orange-400" />}
               {neighborhoodFilter.length > 0
                 ? `${filtered.length} in ${neighborhoodFilter.length === 1 ? neighborhoodFilter[0] : `${neighborhoodFilter.length} areas`}`
                 : `${filtered.length} venues`}
@@ -341,6 +344,13 @@ export function HomePage({ onViewVenue }) {
       {activeTab === 'groups' && (
         <div className="flex-1 overflow-hidden flex flex-col">
           <GroupsPage onViewVenue={onViewVenue} />
+        </div>
+      )}
+
+      {/* ── Flare ── */}
+      {activeTab === 'flare' && (
+        <div className="flex-1 overflow-auto">
+          <FlarePage />
         </div>
       )}
 
