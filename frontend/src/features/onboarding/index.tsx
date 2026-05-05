@@ -1,370 +1,561 @@
-import { useState, useEffect } from 'react';
+/**
+ * New 4-step onboarding (v2.0)
+ *
+ * Step 0 — Signup           (name capture / auth confirmation)
+ * Step 1 — Top Genres       (9 tiles, pick ≤3)
+ * Step 2 — Neighborhoods    (chip multi-select, ≤3)
+ * Step 3 — This vs That     (3 head-to-head venue rounds)
+ * Step 4 — Ideal Night      (chips + free text → Claude infers VenueVector)
+ */
+
+import { useState } from 'react';
 import { useStore } from '../../store/index';
 import { supabase, isSupabaseEnabled } from '../../lib/supabase';
-import { Button, Pill, ProgressBar, SectionHeader, RatingSlider } from '../../components/ui/index';
-import { ArtistSearch } from './components/ArtistSearch';
-import { VenueSearch } from './components/VenueSearch';
-import { enrichCuratedVenues } from '../../lib/places';
-import { NYC_VENUES, NEIGHBORHOODS, NIGHT_TYPES } from '../../data/venues';
-import { ChevronRight, MapPin, Music } from 'lucide-react';
-import type { Venue, UserPreferences, CustomSeedVenue } from '@venuematch/shared';
+import { inferUserVector } from '../../lib/claude';
+import { Button, ProgressBar } from '../../components/ui/index';
+import { NYC_VENUES, NEIGHBORHOODS } from '../../data/venues';
+import { Music2, MapPin, Sparkles, Zap } from 'lucide-react';
+import type { Venue, VenueVector } from '@venuematch/shared';
 
-const NIGHTS = ['Thursday', 'Friday', 'Saturday', 'Sunday', 'Other'];
+// ── Genre definitions ────────────────────────────────────────────────────────
 
-const PURPOSE_VENUE_WEIGHTS: Record<string, Partial<Record<keyof Venue, number>>> = {
-  dancing:          { dance_score: 2, energy_score: 1 },
-  live_music:       { music_score: 2 },
-  low_key:          { energy_score: -1, music_score: 1 },
-  discover_artists: { music_score: 2 },
-  date_night:       { demo_score: 2, energy_score: -0.5 },
-  group_outing:     { energy_score: 2, dance_score: 1 },
-};
-
-const PURPOSE_GENRE_KEYWORDS: Record<string, string[]> = {
-  dancing:          ['house', 'techno', 'electronic', 'disco', 'dance', 'rave'],
-  live_music:       ['jazz', 'rock', 'indie', 'soul', 'experimental', 'live'],
-  low_key:          ['ambient', 'jazz', 'indie', 'folk', 'soul', 'acoustic'],
-  date_night:       ['r&b', 'soul', 'jazz', 'pop', 'dream pop'],
-  discover_artists: ['experimental', 'electronic', 'indie', 'afropop', 'afrobeats'],
-  group_outing:     ['hip-hop', 'rap', 'pop', 'reggaeton', 'latin', 'afropop'],
-};
-
-function rankVenuesByPrefs(venues: Venue[], prefs: UserPreferences): Venue[] {
-  if (!prefs?.purposes?.length && !prefs?.neighborhoods?.length) return venues;
-  return [...venues].sort((a, b) => {
-    let scoreA = 0, scoreB = 0;
-    if (prefs.neighborhoods?.length) {
-      if (prefs.neighborhoods.includes(a.neighborhood)) scoreA += 3;
-      if (prefs.neighborhoods.includes(b.neighborhood)) scoreB += 3;
-    }
-    for (const purpose of (prefs.purposes || [])) {
-      const weights = PURPOSE_VENUE_WEIGHTS[purpose] || {};
-      for (const [key, w] of Object.entries(weights)) {
-        scoreA += ((a[key as keyof Venue] as number) || 0) * (w ?? 0);
-        scoreB += ((b[key as keyof Venue] as number) || 0) * (w ?? 0);
-      }
-    }
-    return scoreB - scoreA;
-  });
-}
-
-function rankArtistsByPrefs<T extends { genres: string[] }>(artists: T[], prefs: UserPreferences): T[] {
-  if (!prefs?.purposes?.length) return artists;
-  const keywords = prefs.purposes.flatMap((p) => PURPOSE_GENRE_KEYWORDS[p] || []);
-  if (!keywords.length) return artists;
-  return [...artists].sort((a, b) => {
-    const scoreA = (a.genres || []).filter((g) => keywords.some((k) => g.toLowerCase().includes(k))).length;
-    const scoreB = (b.genres || []).filter((g) => keywords.some((k) => g.toLowerCase().includes(k))).length;
-    return scoreB - scoreA;
-  });
-}
-
-const TRAVEL = [
-  { id: 'neighborhood', label: 'My neighborhood only', sub: 'Within 15 min walk' },
-  { id: 'borough', label: 'Anywhere in my borough', sub: 'Subway ride is fine' },
-  { id: 'city', label: 'Anywhere in NYC', sub: 'I go wherever the music is' },
+const GENRES = [
+  { id: 'electronic', label: 'Electronic', emoji: '🎛️' },
+  { id: 'hip-hop',    label: 'Hip-Hop',    emoji: '🎤' },
+  { id: 'rock',       label: 'Rock',       emoji: '🎸' },
+  { id: 'oldies',     label: 'Oldies',     emoji: '🎶' },
+  { id: 'indie',      label: 'Indie',      emoji: '🌿' },
+  { id: 'pop',        label: 'Pop',        emoji: '✨' },
+  { id: 'sing-alongs',label: 'Sing-Alongs',emoji: '🎙️' },
+  { id: 'jazz',       label: 'Jazz',       emoji: '🎺' },
+  { id: 'chill',      label: 'Chill',      emoji: '🛋️' },
 ];
 
-// ── Onboarding shell ──────────────────────────────────────────────────────────
+// ── Ideal Night chips ────────────────────────────────────────────────────────
+
+const IDEAL_NIGHT_CHIPS = [
+  'Late night',
+  'Good music',
+  'Cocktails',
+  'Meet people',
+  'Dance',
+  'Low key',
+  'Artsy crowd',
+  'NYC underground',
+  'Rooftop',
+  'Live music',
+  'Queer-friendly',
+  'Date night',
+];
+
+// ── Helper to pick seed venues for head-to-head ──────────────────────────────
+
+function pickHeadToHeadVenues(
+  neighborhoods: string[],
+  round: number,
+  previousWinner?: Venue,
+): [Venue, Venue] {
+  const pool =
+    neighborhoods.length > 0
+      ? NYC_VENUES.filter((v) => neighborhoods.includes(v.neighborhood))
+      : NYC_VENUES;
+
+  const safePool = pool.length >= 2 ? pool : NYC_VENUES;
+
+  if (round === 0 || !previousWinner) {
+    // First round: two random venues
+    const shuffled = [...safePool].sort(() => Math.random() - 0.5);
+    return [shuffled[0], shuffled[1]];
+  }
+
+  // Subsequent rounds: previous winner vs a contrastive venue
+  const winner = previousWinner;
+  const others = safePool.filter((v) => v.id !== winner.id);
+  const contrast = [...others].sort(
+    (a, b) =>
+      Math.abs(b.energy_score - winner.energy_score) -
+      Math.abs(a.energy_score - winner.energy_score),
+  );
+  const opponent = contrast[round % contrast.length] ?? others[0];
+  return [winner, opponent];
+}
+
+// ── Onboarding shell ─────────────────────────────────────────────────────────
 
 export function Onboarding() {
   const { onboardingStep, setOnboardingStep, completeOnboarding } = useStore();
-  function goNext(n?: number) { setOnboardingStep(n ?? onboardingStep + 1); }
-  function goBack() { setOnboardingStep(onboardingStep - 1); }
+
+  function goNext(n?: number) {
+    setOnboardingStep(n ?? onboardingStep + 1);
+  }
+  function goBack() {
+    setOnboardingStep(Math.max(0, onboardingStep - 1));
+  }
+
   const steps = [
     <StepSignup key="signup" onNext={() => goNext(1)} />,
-    <StepPreferences key="prefs" onNext={() => goNext(2)} onBack={goBack} />,
-    <StepSeedVenues key="venues" onNext={() => goNext(3)} onBack={goBack} />,
-    <StepSeedArtists key="artists" onNext={() => goNext(4)} onBack={goBack} />,
-    <StepRateVenues key="rate" onNext={completeOnboarding} onBack={goBack} />,
+    <StepGenres key="genres" onNext={() => goNext(2)} onBack={goBack} />,
+    <StepNeighborhoods key="neighborhoods" onNext={() => goNext(3)} onBack={goBack} />,
+    <StepHeadToHead key="headtohead" onNext={() => goNext(4)} onBack={goBack} />,
+    <StepIdealNight key="idealnight" onNext={completeOnboarding} onBack={goBack} />,
   ];
+
   return (
     <div className="h-dvh flex flex-col">
       <div className="px-5 pt-12 pb-3 flex-shrink-0">
-        <ProgressBar step={onboardingStep} total={5} />
+        <ProgressBar step={onboardingStep} total={steps.length} />
       </div>
-      <div className="flex-1 overflow-y-auto overscroll-none">{steps[onboardingStep]}</div>
+      <div className="flex-1 overflow-y-auto overscroll-none">
+        {steps[Math.min(onboardingStep, steps.length - 1)]}
+      </div>
     </div>
   );
 }
 
-// ── Step 1: Signup ────────────────────────────────────────────────────────────
-// When Supabase is configured the user already has an account (auth gate handled it),
-// so this step only collects their display name and saves it to their profile.
-// Without Supabase, it's a simple local name + email capture as before.
+// ── Step 0: Signup ───────────────────────────────────────────────────────────
 
 function StepSignup({ onNext }: { onNext: () => void }) {
-  const { setUser } = useStore();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const { setUser, user } = useStore();
+  const [name, setName] = useState(user?.name ?? '');
+  const [email, setEmail] = useState(user?.email ?? '');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // Pre-fill from Supabase session if available
-  useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setEmail(user.email ?? '');
-        setName(user.user_metadata?.name ?? '');
-      }
-    });
-  }, []);
-
-  async function handleSubmit() {
+  async function handleContinue() {
     if (!name.trim()) return;
     setLoading(true);
+    setError('');
 
-    if (supabase && isSupabaseEnabled) {
-      // Update display name in Supabase Auth metadata
-      await supabase.auth.updateUser({ data: { name: name.trim() } });
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser({ id: user?.id ?? Date.now().toString(), email: user?.email ?? email, name: name.trim() });
-    } else {
-      if (!email.trim()) { setLoading(false); return; }
-      setUser({ name: name.trim(), email: email.trim(), id: Date.now().toString() });
+    try {
+      if (isSupabaseEnabled && supabase) {
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser();
+        if (authUser) {
+          setUser({ id: authUser.id, name: name.trim(), email: authUser.email ?? email });
+          await supabase.from('users').upsert({
+            id: authUser.id,
+            name: name.trim(),
+            email: authUser.email ?? email,
+          });
+          onNext();
+          return;
+        }
+      }
+      setUser({ id: `local_${Date.now()}`, name: name.trim(), email });
+      onNext();
+    } catch (err) {
+      setError('Something went wrong. Try again.');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    setLoading(false);
+  return (
+    <div className="px-6 py-8 flex flex-col gap-6">
+      <div>
+        <div className="text-3xl font-bold text-white mb-2">Welcome to VenueMatch</div>
+        <p className="text-soft text-sm">
+          NYC nightlife, matched to your taste. Let's build your profile — takes 2 minutes.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <div>
+          <label className="text-xs text-soft uppercase tracking-wider mb-1 block">
+            Your name
+          </label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="First name"
+            className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-brand-purple"
+            onKeyDown={(e) => e.key === 'Enter' && handleContinue()}
+          />
+        </div>
+        {!isSupabaseEnabled && (
+          <div>
+            <label className="text-xs text-soft uppercase tracking-wider mb-1 block">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-brand-purple"
+              onKeyDown={(e) => e.key === 'Enter' && handleContinue()}
+            />
+          </div>
+        )}
+        {error && <p className="text-red-400 text-sm">{error}</p>}
+      </div>
+
+      <Button
+        onClick={handleContinue}
+        disabled={!name.trim() || loading}
+        className="w-full"
+        size="lg"
+      >
+        {loading ? 'Saving…' : 'Get Started →'}
+      </Button>
+    </div>
+  );
+}
+
+// ── Step 1: Top Genres ───────────────────────────────────────────────────────
+
+function StepGenres({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+  const { updatePrefs } = useStore();
+  const [selected, setSelected] = useState<string[]>([]);
+
+  function toggle(id: string) {
+    setSelected((prev) =>
+      prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : prev.length < 3
+        ? [...prev, id]
+        : prev,
+    );
+  }
+
+  function handleNext() {
+    updatePrefs({ purposes: selected });
     onNext();
   }
 
   return (
-    <div className="px-5 pt-6 pb-16 space-y-8 max-w-md mx-auto">
-      <div className="text-center space-y-4 pt-4">
-        <div className="w-20 h-20 mx-auto rounded-3xl bg-brand-purple flex items-center justify-center shadow-xl shadow-purple-900/40">
-          <Music size={32} className="text-white" />
+    <div className="px-6 py-8 flex flex-col gap-6">
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <Music2 size={20} className="text-brand-purple" />
+          <span className="text-xs text-soft uppercase tracking-wider">Step 1 of 4</span>
         </div>
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight">VenueMatch</h1>
-          <p className="text-soft mt-2">NYC nightlife, matched to your vibe</p>
-        </div>
-        <div className="flex justify-center gap-4 text-xs text-muted">
-          <span>🎭 25 venues</span><span>·</span><span>🤖 AI recs</span><span>·</span><span>🗽 NYC only</span>
-        </div>
+        <h2 className="text-2xl font-bold text-white">What music moves you?</h2>
+        <p className="text-soft text-sm mt-1">Pick up to 3 genres</p>
       </div>
-      <div className="space-y-3">
-        <input type="text" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)}
-          className="w-full glass rounded-2xl px-5 py-4 text-sm outline-none placeholder:text-muted" />
-        {/* Only show email input when not using Supabase Auth */}
-        {!isSupabaseEnabled && (
-          <input type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-            className="w-full glass rounded-2xl px-5 py-4 text-sm outline-none placeholder:text-muted" />
-        )}
-      </div>
-      <Button onClick={handleSubmit} disabled={loading || !name || (!isSupabaseEnabled && !email)} className="w-full" size="lg">
-        {loading ? 'Saving…' : 'Build my taste graph'} <ChevronRight size={16} className="inline ml-1" />
-      </Button>
-      <p className="text-center text-xs text-muted">No social feed. No ads. Just your next great night out.</p>
-    </div>
-  );
-}
 
-// ── Step 2: Preferences ───────────────────────────────────────────────────────
-
-function StepPreferences({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-  const { prefs, updatePrefs } = useStore();
-  const [nights, setNights] = useState<string[]>(prefs.nights || []);
-  const [purposes, setPurposes] = useState<string[]>(prefs.purposes || []);
-  const [travel, setTravel] = useState(prefs.travel_radius || 'borough');
-  const [neighborhoods, setNeighborhoods] = useState<string[]>(prefs.neighborhoods || []);
-
-  function toggle<T>(arr: T[], setArr: (v: T[]) => void, val: T) {
-    setArr(arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val]);
-  }
-  function handleNext() { updatePrefs({ nights, purposes, travel_radius: travel, neighborhoods }); onNext(); }
-
-  return (
-    <div className="px-5 pt-2 pb-28 space-y-7 max-w-md mx-auto">
-      <SectionHeader label="Step 1 of 4" title="Your night out" subtitle="Tell us how you like to go out." />
-      <div className="space-y-3">
-        <p className="text-sm font-medium text-soft">Which nights do you go out?</p>
-        <div className="flex flex-wrap gap-2">
-          {NIGHTS.map((n) => <Pill key={n} active={nights.includes(n)} onClick={() => toggle(nights, setNights, n)}>{n}</Pill>)}
-        </div>
-      </div>
-      <div className="space-y-3">
-        <p className="text-sm font-medium text-soft">What are you looking for? <span className="text-muted">(up to 3)</span></p>
-        <div className="flex flex-wrap gap-2">
-          {NIGHT_TYPES.map((t) => (
-            <Pill key={t.id} active={purposes.includes(t.id)}
-              onClick={() => purposes.includes(t.id) ? toggle(purposes, setPurposes, t.id) : purposes.length < 3 ? toggle(purposes, setPurposes, t.id) : undefined}>
-              {t.label}
-            </Pill>
-          ))}
-        </div>
-      </div>
-      <div className="space-y-3">
-        <p className="text-sm font-medium text-soft">How far will you travel?</p>
-        <div className="space-y-2">
-          {TRAVEL.map((t) => (
-            <button key={t.id} onClick={() => setTravel(t.id)}
-              className={`w-full text-left px-5 py-3.5 rounded-2xl transition-all border ${travel === t.id ? 'border-brand-purple bg-brand-purple/10' : 'glass border-transparent'}`}>
-              <p className={`text-sm font-medium ${travel === t.id ? 'text-white' : 'text-soft'}`}>{t.label}</p>
-              <p className="text-xs text-muted">{t.sub}</p>
+      <div className="grid grid-cols-3 gap-3">
+        {GENRES.map(({ id, label, emoji }) => {
+          const active = selected.includes(id);
+          return (
+            <button
+              key={id}
+              onClick={() => toggle(id)}
+              className={`flex flex-col items-center justify-center gap-1 rounded-2xl p-4 h-24 text-sm font-medium transition-all duration-200 active:scale-95 ${
+                active
+                  ? 'bg-brand-purple text-white shadow-lg shadow-purple-900/40'
+                  : 'glass text-soft hover:text-white'
+              }`}
+            >
+              <span className="text-2xl">{emoji}</span>
+              <span>{label}</span>
             </button>
-          ))}
-        </div>
+          );
+        })}
       </div>
-      <div className="space-y-3">
-        <p className="text-sm font-medium text-soft">Neighborhoods <span className="text-muted">(optional)</span></p>
-        <div className="flex flex-wrap gap-2">
-          {NEIGHBORHOODS.map((n) => <Pill key={n} active={neighborhoods.includes(n)} onClick={() => toggle(neighborhoods, setNeighborhoods, n)}>{n}</Pill>)}
-        </div>
-      </div>
-      <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/90 to-transparent">
-        <div className="flex gap-3 max-w-md mx-auto">
-          <Button onClick={onBack} variant="secondary" className="flex-shrink-0">Back</Button>
-          <Button onClick={handleNext} className="flex-1">Continue <ChevronRight size={16} className="inline ml-1" /></Button>
-        </div>
+
+      <div className="flex gap-3 pt-2">
+        <Button variant="secondary" onClick={onBack} className="flex-1">
+          Back
+        </Button>
+        <Button onClick={handleNext} className="flex-1" disabled={selected.length === 0}>
+          Continue
+        </Button>
       </div>
     </div>
   );
 }
 
-// ── Step 3: Seed Venues ───────────────────────────────────────────────────────
+// ── Step 2: Neighborhood Preference ─────────────────────────────────────────
 
-function StepSeedVenues({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-  const { seedVenues, toggleSeedVenue, customSeedVenues, toggleCustomSeedVenue, prefs } = useStore();
-  const [query, setQuery] = useState('');
-  const [curatedVenues, setCuratedVenues] = useState<Venue[]>(() => rankVenuesByPrefs(NYC_VENUES, prefs));
-  const totalSelected = seedVenues.length + customSeedVenues.length;
-  const isSearching = query.length >= 2;
+function StepNeighborhoods({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+  const { updatePrefs } = useStore();
+  const [selected, setSelected] = useState<string[]>([]);
 
-  useEffect(() => {
-    enrichCuratedVenues(NYC_VENUES).then((enriched) => setCuratedVenues(rankVenuesByPrefs(enriched, prefs)));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  function toggle(n: string) {
+    setSelected((prev) =>
+      prev.includes(n)
+        ? prev.filter((x) => x !== n)
+        : prev.length < 3
+        ? [...prev, n]
+        : prev,
+    );
+  }
+
+  function handleNext() {
+    updatePrefs({ neighborhoods: selected });
+    onNext();
+  }
 
   return (
-    <div className="px-5 pt-2 pb-32 max-w-md mx-auto">
-      <SectionHeader label="Step 2 of 4" title="Your favorite spots" subtitle="Search any NYC venue or pick from our curated list." />
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-xs text-muted">{isSearching ? '' : `${curatedVenues.length} venues`}</span>
-        <span className={`text-xs font-semibold ${totalSelected === 5 ? 'text-brand-purple' : 'text-muted'}`}>
-          {totalSelected}/5 selected
-        </span>
+    <div className="px-6 py-8 flex flex-col gap-6">
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <MapPin size={20} className="text-brand-purple" />
+          <span className="text-xs text-soft uppercase tracking-wider">Step 2 of 4</span>
+        </div>
+        <h2 className="text-2xl font-bold text-white">Where do you like to go?</h2>
+        <p className="text-soft text-sm mt-1">
+          Pick up to 3 neighborhoods — or skip to see all of NYC
+        </p>
       </div>
-      <VenueSearch query={query} onQueryChange={setQuery} selected={customSeedVenues}
-        onToggle={toggleCustomSeedVenue} maxSelected={5 - seedVenues.length} />
-      {!isSearching && (
-        <>
-          <div className="flex items-center gap-3 my-4">
-            <div className="flex-1 h-px bg-white/8" />
-            <span className="text-xs text-muted">suggested spots</span>
-            <div className="flex-1 h-px bg-white/8" />
-          </div>
-          <div className="flex flex-col divide-y divide-white/5">
-            {curatedVenues.map((v) => {
-              const isSelected = seedVenues.includes(v.id);
-              const disabled = !isSelected && totalSelected >= 5;
-              return (
-                <button key={v.id} onClick={() => toggleSeedVenue(v.id)} disabled={disabled}
-                  className={`flex items-center gap-3 py-2.5 w-full text-left transition-all rounded-xl disabled:opacity-30 ${isSelected ? 'bg-brand-purple/10' : 'hover:bg-white/5'}`}>
-                  <div className="relative flex-shrink-0">
-                    {v.photo ? (
-                      <img src={v.photo} alt={v.name} className="w-11 h-11 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-11 h-11 rounded-full flex items-center justify-center"
-                        style={{ background: `linear-gradient(135deg, ${v.img_color} 0%, #1a1a2e 100%)` }}>
-                        <MapPin size={14} className="text-white/70" />
-                      </div>
-                    )}
-                    {isSelected && (
-                      <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-brand-purple flex items-center justify-center ring-2 ring-[#0a0a0f]">
-                        <ChevronRight size={8} className="text-white" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium truncate ${isSelected ? 'text-white' : 'text-soft'}`}>{v.name}</p>
-                    <p className="text-xs text-muted mt-0.5 truncate">{v.neighborhood} · {v.music_genres.slice(0, 2).join(', ')}</p>
-                  </div>
-                  <div className={`w-5 h-5 rounded-full border flex-shrink-0 flex items-center justify-center transition-all ${isSelected ? 'bg-brand-purple border-brand-purple' : 'border-white/20'}`}>
-                    {isSelected && <ChevronRight size={8} className="text-white" />}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </>
+
+      <div className="flex flex-wrap gap-2">
+        {NEIGHBORHOODS.map((n) => {
+          const active = selected.includes(n);
+          return (
+            <button
+              key={n}
+              onClick={() => toggle(n)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 active:scale-95 ${
+                active
+                  ? 'bg-brand-purple text-white'
+                  : 'glass text-soft hover:text-white'
+              }`}
+            >
+              {n}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex gap-3 pt-2">
+        <Button variant="secondary" onClick={onBack} className="flex-1">
+          Back
+        </Button>
+        <Button onClick={handleNext} className="flex-1">
+          {selected.length === 0 ? 'Skip (show all)' : 'Continue'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Step 3: This vs That ─────────────────────────────────────────────────────
+
+function StepHeadToHead({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+  const { prefs, toggleSeedVenue } = useStore();
+  const [round, setRound] = useState(0);
+  const [currentWinner, setCurrentWinner] = useState<Venue | undefined>(undefined);
+  const [pair, setPair] = useState<[Venue, Venue]>(() =>
+    pickHeadToHeadVenues(prefs.neighborhoods, 0),
+  );
+
+  const totalRounds = 3;
+
+  function pick(venue: Venue) {
+    if (round + 1 >= totalRounds) {
+      toggleSeedVenue(venue.id);
+      onNext();
+      return;
+    }
+    const nextRound = round + 1;
+    const nextPair = pickHeadToHeadVenues(prefs.neighborhoods, nextRound, venue);
+    setCurrentWinner(venue);
+    setPair(nextPair);
+    setRound(nextRound);
+  }
+
+  const [venueA, venueB] = pair;
+
+  return (
+    <div className="px-6 py-8 flex flex-col gap-6">
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <Zap size={20} className="text-brand-purple" />
+          <span className="text-xs text-soft uppercase tracking-wider">Step 3 of 4</span>
+        </div>
+        <h2 className="text-2xl font-bold text-white">This or that?</h2>
+        <p className="text-soft text-sm mt-1">
+          Round {round + 1} of {totalRounds} — pick the one that calls to you more
+        </p>
+      </div>
+
+      {/* Progress dots */}
+      <div className="flex gap-2">
+        {Array.from({ length: totalRounds }).map((_, i) => (
+          <div
+            key={i}
+            className={`h-1 flex-1 rounded-full transition-colors ${
+              i < round
+                ? 'bg-brand-purple'
+                : i === round
+                ? 'bg-brand-purple/50'
+                : 'bg-white/10'
+            }`}
+          />
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-4">
+        {[venueA, venueB].map((v) => (
+          <button
+            key={v.id}
+            onClick={() => pick(v)}
+            className="glass rounded-2xl p-5 text-left hover:border-brand-purple/50 border border-white/5 transition-all duration-200 active:scale-[0.98]"
+          >
+            <div
+              className="w-full h-20 rounded-xl mb-3"
+              style={{
+                background: `linear-gradient(135deg, ${v.img_color}cc 0%, ${v.img_color} 100%)`,
+              }}
+            />
+            <div className="font-bold text-white text-lg">{v.name}</div>
+            <div className="text-soft text-sm mb-2">{v.neighborhood}</div>
+            <div className="flex flex-wrap gap-1">
+              {v.vibe_tags.slice(0, 3).map((tag) => (
+                <span key={tag} className="text-xs glass px-2 py-0.5 rounded-full text-soft">
+                  {tag}
+                </span>
+              ))}
+            </div>
+            <p className="text-soft text-xs mt-2 line-clamp-2">{v.description}</p>
+          </button>
+        ))}
+      </div>
+
+      <Button variant="ghost" onClick={onBack} className="text-center text-sm">
+        ← Back
+      </Button>
+    </div>
+  );
+}
+
+// ── Step 4: Ideal Night ──────────────────────────────────────────────────────
+
+function StepIdealNight({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+  const { prefs, seedVenues, setUserVectors, user } = useStore();
+  const [selectedChips, setSelectedChips] = useState<string[]>([]);
+  const [freeText, setFreeText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  function toggleChip(chip: string) {
+    setSelectedChips((prev) =>
+      prev.includes(chip) ? prev.filter((c) => c !== chip) : [...prev, chip],
+    );
+  }
+
+  async function handleFinish() {
+    setLoading(true);
+    setError('');
+
+    try {
+      const winningVenue =
+        seedVenues.length > 0
+          ? (NYC_VENUES.find((v) => v.id === seedVenues[seedVenues.length - 1]) ?? null)
+          : null;
+
+      // genres stored from Step 1 in prefs.purposes
+      const genres = (prefs.purposes ?? []).filter((p) =>
+        GENRES.some((g) => g.id === p),
+      );
+
+      const vectors: VenueVector = await inferUserVector({
+        selectedGenres: genres,
+        neighborhoods: prefs.neighborhoods ?? [],
+        winningVenue,
+        idealNightChips: selectedChips,
+        freeText: freeText.trim() || undefined,
+      });
+
+      setUserVectors(vectors);
+
+      if (isSupabaseEnabled && supabase && user) {
+        await supabase
+          .from('users')
+          .update({
+            vectors,
+            preferred_neighborhoods: prefs.neighborhoods ?? [],
+            prefs,
+          })
+          .eq('id', user.id);
+      }
+
+      onNext();
+    } catch (err) {
+      console.error('inferUserVector failed:', err);
+      setError('Could not build your full profile — you can always update it later.');
+      const fallback: VenueVector = {
+        genres: (prefs.purposes ?? []).slice(0, 3),
+        vibe: [0.5, 0.5, 0.5, 0.5],
+        cost: 2,
+      };
+      setUserVectors(fallback);
+      setTimeout(onNext, 1500);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const canFinish =
+    !loading && (selectedChips.length > 0 || freeText.trim().length > 0);
+
+  return (
+    <div className="px-6 py-8 flex flex-col gap-6">
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles size={20} className="text-brand-purple" />
+          <span className="text-xs text-soft uppercase tracking-wider">Step 4 of 4</span>
+        </div>
+        <h2 className="text-2xl font-bold text-white">Describe your ideal night</h2>
+        <p className="text-soft text-sm mt-1">
+          This helps us calibrate your recommendations with AI
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {IDEAL_NIGHT_CHIPS.map((chip) => {
+          const active = selectedChips.includes(chip);
+          return (
+            <button
+              key={chip}
+              onClick={() => toggleChip(chip)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 active:scale-95 ${
+                active
+                  ? 'bg-brand-purple text-white'
+                  : 'glass text-soft hover:text-white'
+              }`}
+            >
+              {chip}
+            </button>
+          );
+        })}
+      </div>
+
+      <div>
+        <label className="text-xs text-soft uppercase tracking-wider mb-1 block">
+          In your own words (optional)
+        </label>
+        <textarea
+          value={freeText}
+          onChange={(e) => setFreeText(e.target.value)}
+          placeholder={`e.g. "I love late-night techno, dark rooms, and getting lost in the music"`}
+          rows={3}
+          className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-brand-purple resize-none"
+        />
+      </div>
+
+      {error && (
+        <div className="text-amber-400 text-sm glass rounded-xl px-4 py-2">{error}</div>
       )}
-      <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/90 to-transparent">
-        <div className="flex gap-3 max-w-md mx-auto">
-          <Button onClick={onBack} variant="secondary" className="flex-shrink-0">Back</Button>
-          <Button onClick={onNext} disabled={totalSelected === 0} className="flex-1">
-            {totalSelected === 0 ? 'Pick at least 1' : `Continue (${totalSelected} selected)`}
-            <ChevronRight size={16} className="inline ml-1" />
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-// ── Step 4: Seed Artists ──────────────────────────────────────────────────────
-
-function StepSeedArtists({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-  const { seedArtists, toggleSeedArtist, prefs } = useStore();
-  return (
-    <div className="px-5 pt-2 pb-32 max-w-md mx-auto">
-      <SectionHeader label="Step 3 of 4" title="Your sound" subtitle="Pick 5 artists whose music defines your ideal night." />
-      <ArtistSearch selected={seedArtists} onToggle={toggleSeedArtist} maxSelected={5}
-        prefs={prefs} rankFn={rankArtistsByPrefs} />
-      <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/90 to-transparent">
-        <div className="flex gap-3 max-w-md mx-auto">
-          <Button onClick={onBack} variant="secondary" className="flex-shrink-0">Back</Button>
-          <Button onClick={onNext} disabled={seedArtists.length === 0} className="flex-1">
-            {seedArtists.length === 0 ? 'Pick at least 1' : `Continue (${seedArtists.length} selected)`}
-            <ChevronRight size={16} className="inline ml-1" />
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Step 5: Rate Venues ───────────────────────────────────────────────────────
-
-function StepRateVenues({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-  const { seedVenues, venueRatings, setVenueRating } = useStore();
-  const [idx, setIdx] = useState(0);
-  const venues = NYC_VENUES.filter((v) => seedVenues.includes(v.id));
-  const venue = venues[idx];
-  const rating = venueRatings[venue?.id] || { music: 3, energy: 3, dance: 3, demo: 3 };
-
-  if (!venue) { onNext(); return null; }
-
-  function handleNext() { if (idx < venues.length - 1) setIdx((i) => i + 1); else onNext(); }
-  function handleBack() { if (idx > 0) setIdx((i) => i - 1); else onBack(); }
-
-  return (
-    <div className="px-5 pt-2 pb-32 max-w-md mx-auto">
-      <SectionHeader label={`Step 4 of 4 · Venue ${idx + 1} of ${venues.length}`}
-        title={`Rate ${venue.name}`} subtitle="Your ratings calibrate the matching algorithm." />
-      <div className="h-28 rounded-2xl mb-6 relative overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${venue.img_color} 0%, #0a0a0f 100%)` }}>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-        <div className="absolute bottom-4 left-4">
-          <p className="font-semibold">{venue.name}</p>
-          <div className="flex items-center gap-1 text-white/60 text-xs mt-0.5">
-            <MapPin size={10} /><span>{venue.neighborhood}</span>
-          </div>
-        </div>
-      </div>
-      <div className="glass rounded-2xl p-5 space-y-7">
-        <RatingSlider label="Music & sound" emoji="🎵" value={rating.music} onChange={(v) => setVenueRating(venue.id, 'music', v)} />
-        <RatingSlider label="Crowd energy" emoji="⚡" value={rating.energy} onChange={(v) => setVenueRating(venue.id, 'energy', v)} />
-        <RatingSlider label="Danceability" emoji="🕺" value={rating.dance} onChange={(v) => setVenueRating(venue.id, 'dance', v)} />
-        <RatingSlider label="Crowd match" emoji="👥" value={rating.demo} onChange={(v) => setVenueRating(venue.id, 'demo', v)} />
-      </div>
-      <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/90 to-transparent">
-        <div className="flex gap-3 max-w-md mx-auto">
-          <Button onClick={handleBack} variant="secondary" className="flex-shrink-0">Back</Button>
-          <Button onClick={handleNext} className="flex-1">
-            {idx < venues.length - 1 ? 'Next venue →' : 'Finish & build my graph ✨'}
-          </Button>
-        </div>
+      <div className="flex gap-3 pt-2">
+        <Button variant="secondary" onClick={onBack} className="flex-1" disabled={loading}>
+          Back
+        </Button>
+        <Button onClick={handleFinish} className="flex-1" disabled={!canFinish}>
+          {loading ? (
+            <span className="flex items-center gap-2 justify-center">
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Building profile…
+            </span>
+          ) : (
+            'Find my venues →'
+          )}
+        </Button>
       </div>
     </div>
   );

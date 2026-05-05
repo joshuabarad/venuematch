@@ -2,12 +2,14 @@
  * fetch-venues.mjs
  *
  * Monthly data pipeline: pulls venue data for East Village, Lower East Side,
- * and West Village from Google Places, then dumps to CSV.
+ * and West Village from Google Places, then enriches with Claude Haiku to
+ * derive VenueVector (genres, vibe[4], cost), then dumps to CSV.
  *
  * Output: data/venues-raw.csv
  *
  * Required env vars:
- *   VITE_GOOGLE_PLACES_KEY — already in your .env, no extra key needed
+ *   VITE_GOOGLE_PLACES_KEY  — Google Places API key
+ *   ANTHROPIC_API_KEY       — Claude API key (for vector enrichment)
  *
  * Usage:
  *   node --env-file=.env scripts/fetch-venues.mjs
@@ -15,6 +17,7 @@
  * Rate limits:
  *   Google Places Text Search: 1 req/s keeps well under quota
  *   Google Places Details:     1 req/s, ~300 calls total per run
+ *   Claude Haiku enrichment:   ~3 req/s (well within limits)
  */
 
 import { writeFileSync } from 'fs';
@@ -23,6 +26,9 @@ import { writeFileSync } from 'fs';
 
 const GOOGLE_KEY = process.env.VITE_GOOGLE_PLACES_KEY;
 if (!GOOGLE_KEY) { console.error('Missing VITE_GOOGLE_PLACES_KEY — run with: node --env-file=.env scripts/fetch-venues.mjs'); process.exit(1); }
+
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+if (!ANTHROPIC_KEY) { console.warn('Warning: ANTHROPIC_API_KEY not set — Claude enrichment will be skipped, vectors column will be empty.'); }
 
 const PLACES_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
 const PLACES_DETAIL_URL = 'https://places.googleapis.com/v1/places';
@@ -133,6 +139,79 @@ function formatReviews(reviews = []) {
     .join(' ||| ');
 }
 
+// ── Claude enrichment ────────────────────────────────────────────────────────
+
+/**
+ * Call Claude Haiku to derive a VenueVector from Places data.
+ * Returns { genres: string[], vibe: [n,n,n,n], cost: 1-4 } or null on failure.
+ */
+async function enrichWithClaude({ name, description, types, reviews, priceLevel, rating }) {
+  if (!ANTHROPIC_KEY) return null;
+
+  const reviewSnippets = (reviews || [])
+    .slice(0, 5)
+    .map(r => `"${r}"`)
+    .join('\n');
+
+  const prompt = `You are a NYC nightlife data enricher. Analyze this venue and return a VenueVector JSON.
+
+Venue: ${name}
+Description: ${description || 'none'}
+Google types: ${(types || []).join(', ')}
+Price level: ${priceLevel ?? 'unknown'} (1=free, 2=moderate, 3=expensive, 4=very expensive)
+Google rating: ${rating ?? 'unknown'}
+Recent reviews:
+${reviewSnippets || 'No reviews available'}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{
+  "genres": ["3-6 specific lowercase genre tags like techno, hip-hop, indie rock, jazz, house, r&b"],
+  "vibe": [energy_0_to_1, underground_0_to_1, social_0_to_1, dance_0_to_1],
+  "cost": 1_to_4
+}
+
+Vibe dimensions (0-1):
+- energy:      0=mellow lounge, 1=high-energy club
+- underground: 0=mainstream/commercial, 1=underground/alternative
+- social:      0=focused listening crowd, 1=mixer/meetup
+- dance:       0=standing bar, 1=dance floor focus
+
+Cost: match the price_level (null/1=cost 1 or 2, 2=cost 2, 3=cost 3, 4=cost 4)`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-20250514',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn(`  Claude API error ${res.status} for ${name}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const text = data.content?.[0]?.text ?? '';
+    const json = text.replace(/```json|```/g, '').trim();
+    const vectors = JSON.parse(json);
+    // Clamp vibe values to [0,1]
+    vectors.vibe = vectors.vibe.map(v => Math.max(0, Math.min(1, v)));
+    vectors.cost = Math.max(1, Math.min(4, Math.round(vectors.cost)));
+    return vectors;
+  } catch (err) {
+    console.warn(`  Claude enrichment failed for ${name}: ${err.message}`);
+    return null;
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -181,6 +260,7 @@ async function main() {
     'hours',
     'description',
     'google_reviews',
+    'vectors',       // JSON: { genres[], vibe[4], cost }
   ];
 
   const rows = [CSV_HEADER.join(',')];
@@ -199,6 +279,24 @@ async function main() {
       continue;
     }
 
+    // Extract review texts for Claude enrichment
+    const reviewTexts = (detail.reviews || [])
+      .slice(0, 5)
+      .map(r => r.text?.text || '')
+      .filter(Boolean);
+
+    // Claude Haiku enrichment pass
+    const vectors = await enrichWithClaude({
+      name: detail.displayName?.text || '',
+      description: detail.editorialSummary?.text || '',
+      types: detail.types || [],
+      reviews: reviewTexts,
+      priceLevel: detail.priceLevel,
+      rating: detail.rating,
+    });
+    // Small delay between Claude calls
+    await sleep(400);
+
     rows.push(rowToCSV([
       placeId,
       detail.displayName?.text || '',
@@ -212,9 +310,11 @@ async function main() {
       formatHours(detail.regularOpeningHours),
       detail.editorialSummary?.text || '',
       formatReviews(detail.reviews),
+      vectors ? JSON.stringify(vectors) : '',
     ]));
 
-    process.stdout.write(` ✓ ${detail.displayName?.text || placeId}\n`);
+    const vectorStatus = vectors ? ' ✦' : ' (no vector)';
+    process.stdout.write(` ✓ ${detail.displayName?.text || placeId}${vectorStatus}\n`);
 
     // Checkpoint every 25 venues so a partial run is never lost
     if (processed % 25 === 0) {

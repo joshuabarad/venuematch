@@ -7,17 +7,21 @@ import { AuthPage } from './features/auth/index';
 import { Onboarding } from './features/onboarding/index';
 import { HomePage } from './features/discovery/index';
 import { VenueDetail } from './features/venue-detail/index';
+import { SessionVibePrompt } from './features/session/SessionVibePrompt';
 import type { Venue } from '@venuematch/shared';
 
 export default function App() {
   const { session, loading } = useAuth();
-  const { onboardingComplete, theme } = useStore();
+  const { onboardingComplete, theme, sessionDate, userVectors } = useStore();
 
   // Apply theme class to root so CSS vars can be scoped
   if (typeof document !== 'undefined') {
     document.documentElement.classList.toggle('light', theme === 'light');
   }
+
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
+  // Track whether the user has answered (or skipped) tonight's session prompt
+  const [sessionPromptDone, setSessionPromptDone] = useState(false);
 
   // Hydrate Zustand from server when a session exists
   useServerSync(session?.user ?? null);
@@ -37,13 +41,26 @@ export default function App() {
   // Auth passed (or Supabase not configured) → onboarding gate
   if (!onboardingComplete) return <Onboarding />;
 
+  // Returning user: show "Where to Tonight?" session prompt once per day
+  // Only shown when: onboarding complete + user has a vector + haven't answered today
+  const todayStr = new Date().toDateString();
+  const needsSessionPrompt =
+    !sessionPromptDone &&
+    userVectors !== null &&
+    sessionDate !== todayStr;
+
+  if (needsSessionPrompt) {
+    return <SessionVibePrompt onDone={() => setSessionPromptDone(true)} />;
+  }
+
   // Venue detail overlay
-  if (selectedVenue)
+  if (selectedVenue) {
     return (
       <div className="max-w-2xl mx-auto">
         <VenueDetail venue={selectedVenue} onClose={() => setSelectedVenue(null)} />
       </div>
     );
+  }
 
   return <HomePage onViewVenue={setSelectedVenue} />;
 }

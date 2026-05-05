@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { NYC_VENUES } from '../data/venues';
 import { buildUserVector, buildGroupVector, vectorMatchScore } from '../lib/vectorRec';
+import { netflixMatchScore, blendSessionVector } from '../lib/netflixRec';
 import type {
   Venue,
   AppUser,
@@ -15,6 +16,7 @@ import type {
   Group,
   GroupMember,
   VibeVector,
+  VenueVector,
 } from '@venuematch/shared';
 
 interface StoreState {
@@ -47,6 +49,11 @@ interface StoreState {
   groups: Group[];
   activeGroupId: string | null;
 
+  // v2: Netflix-style vector state
+  userVectors: VenueVector | null;
+  sessionVector: VenueVector | null;
+  sessionDate: string | null; // ISO date string — cleared daily
+
   // Theme
   theme: 'dark' | 'light';
   setTheme: (theme: 'dark' | 'light') => void;
@@ -56,6 +63,10 @@ interface StoreState {
   setOnboardingStep: (step: number) => void;
   completeOnboarding: () => void;
   updatePrefs: (prefs: Partial<UserPreferences>) => void;
+
+  setUserVectors: (vectors: VenueVector) => void;
+  setSessionVector: (vector: VenueVector) => void;
+  clearSession: () => void;
 
   toggleSeedVenue: (id: string) => void;
   toggleCustomSeedVenue: (venue: CustomSeedVenue) => void;
@@ -112,12 +123,20 @@ export const useStore = create<StoreState>()(
       viewedVenues: {},
       groups: [],
       activeGroupId: null,
+      userVectors: null,
+      sessionVector: null,
+      sessionDate: null,
 
       setTheme: (theme) => set({ theme }),
       setUser: (user) => set({ user }),
       setOnboardingStep: (step) => set({ onboardingStep: step }),
       completeOnboarding: () => set({ onboardingComplete: true, onboardingStep: 5 }),
       updatePrefs: (prefs) => set((s) => ({ prefs: { ...s.prefs, ...prefs } })),
+
+      setUserVectors: (vectors) => set({ userVectors: vectors }),
+      setSessionVector: (vector) =>
+        set({ sessionVector: vector, sessionDate: new Date().toDateString() }),
+      clearSession: () => set({ sessionVector: null, sessionDate: null }),
 
       toggleSeedVenue: (id) =>
         set((s) => ({
@@ -256,6 +275,7 @@ export const useStore = create<StoreState>()(
           if (userData.seed_artist_genres) patch.seedArtistGenres = userData.seed_artist_genres as Record<string, string[]>;
           if (userData.custom_seed_venues) patch.customSeedVenues = userData.custom_seed_venues as CustomSeedVenue[];
           if (userData.prefs) patch.prefs = userData.prefs as UserPreferences;
+          if (userData.vectors) patch.userVectors = userData.vectors as VenueVector;
         }
 
         if (ratings.length > 0) {
@@ -339,9 +359,31 @@ export const useStore = create<StoreState>()(
           prefs,
           rejectedVenues,
           viewedVenues,
+          userVectors,
+          sessionVector,
+          sessionDate,
         } = get();
 
-        // Build 16-dim user vector (or group average)
+        const isSessionMode =
+          sessionVector !== null && sessionDate === new Date().toDateString();
+
+        // ── v2: Netflix scoring when venue.vectors is populated ──────────────
+        if (venue.vectors && userVectors) {
+          const effectiveVec = isSessionMode
+            ? blendSessionVector(userVectors, sessionVector!)
+            : userVectors;
+          const preferred = prefs?.neighborhoods ?? [];
+          return netflixMatchScore(
+            effectiveVec,
+            venue,
+            preferred,
+            rejectedVenues ?? {},
+            viewedVenues ?? {},
+            isSessionMode,
+          );
+        }
+
+        // ── Legacy: 16-dim cosine similarity (fallback) ───────────────────────
         const userVec = activeGroupId
           ? (() => {
               const group = groups.find((g) => g.id === activeGroupId);
