@@ -132,7 +132,7 @@ interface HomePageProps {
 type ActiveTab = 'discover' | 'library' | 'groups';
 
 export function HomePage({ onViewVenue }: HomePageProps) {
-  const { user, getMatchScore, groups, activeGroupId, setActiveGroup } = useStore();
+  const { user, getMatchScore, groups, activeGroupId, setActiveGroup, theme } = useStore();
   const [activeTab, setActiveTab] = useState<ActiveTab>('discover');
   const [genreFilter, setGenreFilter] = useState('all');
   const [showRec, setShowRec] = useState(false);
@@ -153,6 +153,11 @@ export function HomePage({ onViewVenue }: HomePageProps) {
     }
     return list.sort((a, b) => getMatchScore(b) - getMatchScore(a));
   }, [venues, genreFilter, getMatchScore]);
+
+  const scores = useMemo(
+    () => Object.fromEntries(venues.map((v) => [v.id, getMatchScore(v)])),
+    [venues, getMatchScore]
+  );
 
   const displayList = useMemo(() => {
     if (!activeVenue) return filtered;
@@ -200,7 +205,7 @@ export function HomePage({ onViewVenue }: HomePageProps) {
       {activeTab === 'discover' && (
         <div className="flex flex-1 min-h-0">
           <div className="relative" style={{ flex: '0 0 65%' }}>
-            <VenueMap venues={filtered} activeVenueId={activeVenue?.id}
+            <VenueMap venues={filtered} activeVenueId={activeVenue?.id} scores={scores} theme={theme}
               onMarkerClick={(v) => { setActiveVenue(v); if (v) listRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }} />
             {activeVenue && (
               <div className="absolute bottom-5 left-5 right-5 z-[500]">

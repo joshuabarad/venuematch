@@ -31,3 +31,6 @@ export interface AppUser {
   name: string;
   email: string;
 }
+
+// 16-dimensional user preference vector derived from seed artists + venues
+export type UserVector = number[];

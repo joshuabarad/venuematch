@@ -11,7 +11,12 @@ import type { Venue } from '@venuematch/shared';
 
 export default function App() {
   const { session, loading } = useAuth();
-  const { onboardingComplete } = useStore();
+  const { onboardingComplete, theme } = useStore();
+
+  // Apply theme class to root so CSS vars can be scoped
+  if (typeof document !== 'undefined') {
+    document.documentElement.classList.toggle('light', theme === 'light');
+  }
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
 
   // Hydrate Zustand from server when a session exists

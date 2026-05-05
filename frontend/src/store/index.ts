@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { NYC_VENUES } from '../data/venues';
+import { buildUserVector, buildGroupVector, vectorMatchScore } from '../lib/vectorRec';
 import type {
   Venue,
   AppUser,
@@ -45,6 +46,10 @@ interface StoreState {
   // Groups
   groups: Group[];
   activeGroupId: string | null;
+
+  // Theme
+  theme: 'dark' | 'light';
+  setTheme: (theme: 'dark' | 'light') => void;
 
   // Actions
   setUser: (user: AppUser) => void;
@@ -102,11 +107,13 @@ export const useStore = create<StoreState>()(
       tonightsRec: null,
       lastRecDate: null,
       tonightAnswers: { q1: null, q2: null, currentSong: '' },
+      theme: 'dark' as 'dark' | 'light',
       rejectedVenues: {},
       viewedVenues: {},
       groups: [],
       activeGroupId: null,
 
+      setTheme: (theme) => set({ theme }),
       setUser: (user) => set({ user }),
       setOnboardingStep: (step) => set({ onboardingStep: step }),
       completeOnboarding: () => set({ onboardingComplete: true, onboardingStep: 5 }),
@@ -324,112 +331,50 @@ export const useStore = create<StoreState>()(
       getMatchScore: (venue) => {
         const {
           activeGroupId,
-          getGroupVibeVector,
-          getVibeVector,
-          prefs,
+          seedArtists,
           seedArtistGenres,
+          seedVenues,
+          customSeedVenues,
+          groups,
+          prefs,
           rejectedVenues,
           viewedVenues,
         } = get();
-        const v = activeGroupId
-          ? (getGroupVibeVector(activeGroupId) || getVibeVector())
-          : getVibeVector();
 
-        // 1. Base 4-dim taste match (0–70)
-        const dims: Array<[keyof Venue, 'music' | 'energy' | 'dance' | 'demo']> = [
-          ['music_score', 'music'],
-          ['energy_score', 'energy'],
-          ['dance_score', 'dance'],
-          ['demo_score', 'demo'],
-        ];
-        let raw = 0;
-        dims.forEach(([vk, uk]) => {
-          const u = (v as unknown as Record<string, number>)[uk] || 3;
-          raw += 1 - Math.abs(u - (venue[vk] as number)) / 5;
-        });
-        const base = (raw / dims.length) * 70;
+        // Build 16-dim user vector (or group average)
+        const userVec = activeGroupId
+          ? (() => {
+              const group = groups.find((g) => g.id === activeGroupId);
+              return group
+                ? buildGroupVector(group.members)
+                : buildUserVector(seedArtists, seedArtistGenres, seedVenues, customSeedVenues);
+            })()
+          : buildUserVector(seedArtists, seedArtistGenres, seedVenues, customSeedVenues);
 
-        // 2. Purpose boost (0–10)
-        const purposes = prefs?.purposes || [];
-        let purposeBoost = 0;
-        if (purposes.includes('dancing') && venue.dance_score >= 4) purposeBoost += 8;
-        if (purposes.includes('low_key') && venue.energy_score <= 2.5) purposeBoost += 8;
-        if (
-          purposes.includes('live_music') &&
-          venue.music_genres.some((g) =>
-            ['jazz', 'blues', 'folk', 'acoustic', 'rock', 'indie'].some((k) =>
-              g.toLowerCase().includes(k)
-            )
-          )
-        )
-          purposeBoost += 8;
-        if (purposes.includes('discover_artists') && venue.music_score >= 4) purposeBoost += 5;
-        if (purposes.includes('date_night') && venue.demo_score >= 4) purposeBoost += 5;
-        purposeBoost = Math.min(purposeBoost, 10);
+        // Base cosine similarity score (50–99)
+        let score = vectorMatchScore(venue, userVec);
 
-        // 3. Neighborhood affinity (0–5)
-        const neighborhoodBoost =
-          prefs?.neighborhoods?.length && prefs.neighborhoods.includes(venue.neighborhood)
-            ? 5
-            : 0;
+        // Neighborhood affinity bonus
+        if (prefs?.neighborhoods?.length && prefs.neighborhoods.includes(venue.neighborhood)) {
+          score = Math.min(99, score + 3);
+        }
 
-        // 4. Genre affinity from seed artists (0–8)
-        const allSeedGenres = Object.values(seedArtistGenres || {})
-          .flat()
-          .map((g) => g.toLowerCase());
-        const venueGenres = venue.music_genres.map((g) => g.toLowerCase());
-        const genreOverlapCount = venueGenres.filter((g) =>
-          allSeedGenres.some((sg) => sg.includes(g) || g.includes(sg))
-        ).length;
-        const genreBoost = Math.min(genreOverlapCount * 3, 8);
-
-        // 5. Popularity boost from Google Places (0–7)
-        const popularityBoost = venue.googleRating
-          ? Math.round(
-              (venue.googleRating / 5) *
-                Math.min(
-                  Math.log10((venue.reviewCount || 1) + 1) / Math.log10(500),
-                  1
-                ) *
-                7
-            )
-          : 0;
-
-        // 6. Rejection penalty
+        // Rejection penalty
         const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        const recent = Object.values(rejectedVenues || {}).filter(
-          (r) => r.timestamp > sevenDaysAgo
-        );
+        const recent = Object.values(rejectedVenues || {}).filter((r) => r.timestamp > sevenDaysAgo);
         const rGenres = new Set(recent.flatMap((r) => r.genres));
-        const rTags = new Set(recent.flatMap((r) => r.vibe_tags));
+        const rTags   = new Set(recent.flatMap((r) => r.vibe_tags));
+        const venueGenres = venue.music_genres.map((g) => g.toLowerCase());
         const gOverlap = venueGenres.filter((g) => rGenres.has(g)).length;
         const tOverlap = (venue.vibe_tags || []).filter((t) => rTags.has(t)).length;
-        const rejectionPenalty =
-          gOverlap >= 2 || tOverlap >= 2 ? 20 : gOverlap + tOverlap >= 2 ? 10 : 0;
+        const rejectionPenalty = gOverlap >= 2 || tOverlap >= 2 ? 20 : gOverlap + tOverlap >= 2 ? 10 : 0;
 
-        // 7. Novelty penalty
+        // Novelty penalty
         const lastViewed = viewedVenues?.[venue.id];
-        const daysSince = lastViewed
-          ? (Date.now() - lastViewed) / (1000 * 60 * 60 * 24)
-          : 999;
-        const noveltyPenalty =
-          daysSince < 1 ? 10 : daysSince < 3 ? 5 : daysSince < 7 ? 2 : 0;
+        const daysSince = lastViewed ? (Date.now() - lastViewed) / (1000 * 60 * 60 * 24) : 999;
+        const noveltyPenalty = daysSince < 1 ? 10 : daysSince < 3 ? 5 : daysSince < 7 ? 2 : 0;
 
-        return Math.max(
-          0,
-          Math.min(
-            100,
-            Math.round(
-              base +
-                purposeBoost +
-                neighborhoodBoost +
-                genreBoost +
-                popularityBoost -
-                rejectionPenalty -
-                noveltyPenalty
-            )
-          )
-        );
+        return Math.max(0, Math.min(100, score - rejectionPenalty - noveltyPenalty));
       },
     }),
     { name: 'venuematch-store', version: 2 }
