@@ -1,334 +1,351 @@
-# VenueMatch — Product Specification
+# VenueMatch — Full Redesign: Product + Technical Spec
 
-> Version 1.0 · April 2026 · Confidential
-
----
-
-## Vision
-
-VenueMatch answers one question: **where should I go tonight?**
-
-It is a taste-learning recommendation engine for NYC nightlife. It learns what you like from the venues and artists you already know, then ranks every venue in its catalog by how well it matches you — and once a night, puts a single AI-powered pick in front of you with a one-line reason.
-
-The long-term product is a three-sided marketplace connecting goers, venues, and artists. The MVP tests the goer-side discovery hypothesis: that curated, taste-matched recommendations feel meaningfully better than Google or Instagram, without requiring venue participation or real-time data.
+> Version 2.0 · May 2026
 
 ---
 
-## The Problem
+## Context
 
-> "The most accurate places are on socials — but posting them leads to overcrowding. The best bars may not want to be put on socials to preserve the vibe."
+VenueMatch is being redesigned around two core ideas:
 
-People in New York who want to dance or discover live music have no reliable way to find the right venue. Discovery is fragmented across Google (inaccurate), Instagram (optimized for virality, not fit), and word-of-mouth (slow, biased). The bars best suited to a given crowd often have no social presence by design.
+1. A **new onboarding flow** (4 steps) that uses AI enrichment to build a user taste profile with shared vector sub-models
+2. **"Where to Tonight"** promoted from a side feature to the primary session entry point — replacing the current generic discovery tab as the app's main value proposition
 
-This is a **signal alignment problem**, not a data problem. Enough information exists — it is just noisy, public-facing, and optimized for reach rather than fit.
-
----
-
-## Target User (v1)
-
-**Primary:** NYC resident, 22–35, goes out 1–3x/month to dance or hear live music. Has strong opinions about venue vibe but finds discovery exhausting. Knows a handful of venues they love; wants to find more like them without trial and error.
-
-**Secondary:** Small friend groups (2–5 people) who need to agree on a spot that works for everyone's taste.
+The Netflix-style matching algorithm ties both together: venues and users share the same `Vectors` sub-model (`genres[]`, `vibe[4]`, `cost`), enabling interpretable, tunable match scores.
 
 ---
 
-## Product Scope — Current MVP
+## Part 1 — Product Spec
 
-The MVP is live-first on **web** (venuematch.vercel.app) with a mobile-first responsive layout. An iOS app is the next platform target.
+### 1.1 Features to Keep (unchanged)
 
-**In scope:**
-- Onboarding (taste calibration)
-- Discovery (map + ranked list)
-- Tonight's Pick (AI recommendation)
-- Venue Detail (info + ratings)
-- Library (saved/visited)
-- Profile (vibe breakdown)
-- Groups (blended taste, local device only for now)
+- Interactive map with gradient-colored dots by match score
+- Light / Dark mode toggle
+- Venue cards with match score badges
+- Google OAuth authentication
+- User ratings on vibe dimensions (sliders in venue detail)
 
-**Out of scope for now:**
-- Venue-side intake (venues managing their own profiles)
-- Artist-side marketplace
-- Real-time event programming ("who's DJing this Friday")
-- Cross-device group sync
-- Friends Flare (location sharing on map)
-- Neighborhood/borough map filtering
-- Push notifications
+### 1.2 Primary UX Change: "Where to Tonight"
 
----
+Currently a floating modal button ("Tonight's pick"). The new design makes it the **first thing a returning user sees on each new session**.
 
-## Feature Modules
+**Return-session flow:**
 
-Each module is independently ownable. One engineer can work on Tonight's Pick while another works on Groups without conflicts.
+1. User opens app after completing onboarding
+2. Before the discovery map loads, a full-screen prompt shows **3 multiple-choice questions** about tonight's vibe
+3. Questions can include an open-ended "anything else?" text field
+4. Answers adjust the match scores for that session (temporary, not persisted to profile)
+5. User lands on the discovery map with recommendations already sorted for tonight
 
----
+**Tonight questions (rotating, 3 per session):**
 
-### Module 1: Onboarding
+- Energy level: Chill / Moderate / High energy
+- Vibe intent: Solo / Date night / Friend group / Big group
+- Genre mood: (user's top genres + "Surprise me")
+- Timing: Getting there early / Late night / Doesn't matter
+- Cost comfort: Whatever / Budget night / Spending freely
 
-**Purpose:** Cold-start the user's taste profile from venues and artists they already know. Onboarding data is pure taste signal — seed venues are never shown as recommendations.
+These answers create a **session vector** that temporarily blends with the base user vector for scoring.
 
-**Owner:** TBD
+### 1.3 New Onboarding (4 Steps)
 
-**Steps:**
+**Step 1 — Top Genres**
 
-| Step | What happens | Key interaction |
-|------|-------------|----------------|
-| 1. Account | Email + display name, or Google sign-in | Form → Supabase Auth |
-| 2. Preferences | Nights (Fri/Sat/weeknights), purposes (dancing, live music, low-key, date night, discover artists), radius, neighborhoods | Multi-select pills |
-| 3. Seed venues | Pick up to 5 venues you already love | Curated grid + Google Places search |
-| 4. Seed artists | Pick up to 5 artists that define your music taste | Spotify search with hover audio preview; iTunes fallback |
-| 5. Calibration | Rate 3 of your seed venues on 4 dimensions (1–5 sliders) | Sliders: Music, Energy, Danceability, Crowd Match |
+- Show 9 genre tiles: Rock, Oldies, Hip-Hop, Electronic, Indie, Pop, Sing-Alongs, Jazz, Chill
+- User picks **up to 3**
+- Each genre maps to vibe vector adjustments (e.g. Electronic → energy↑, underground↑, dance↑)
 
-**On complete:**
-- Call `POST /users/me/complete-onboarding`
-- Server computes initial vibe vector from seed venue scores + calibration ratings
-- User lands on Discover
+**Step 2 — Neighborhood Preference**
 
-**Completion criteria:** All 5 steps done. Steps 3–5 require minimum 1 selection each before advancing.
+- Show NYC neighborhoods as selectable chips
+- Multi-select up to 3
+- Used as a soft filter (not enforced during "Where to Tonight" session)
 
-**TypeScript types used:** `User`, `SeedVenue`, `Artist`, `Preferences`
+**Step 3 — This vs That (3 head-to-head rounds)**
 
-**DB writes:** `users` (seeds, prefs, vibe vector), `user_venue_ratings` (calibration ratings)
+- Show 2 venues side-by-side from the selected neighborhood(s); user picks one
+- Round 2: Winner vs a venue with similar top identifying factors
+- Round 3: If same winner again → test against a dissimilar venue; if upset → find similar to new winner
+- Final winner's vectors are extracted as the **seed vector** for the user
+- Each choice adds ±adjustment to genre, vibe, and cost dimensions
 
----
+**Step 4 — AI Ideal Night Description**
 
-### Module 2: Discovery
-
-**Purpose:** Browse all venues ranked by personal match score. The primary navigation surface.
-
-**Owner:** TBD
-
-**Layout (mobile):**
-- Full-screen map (65% viewport height) with venue pin markers
-- Scrollable ranked list below (35%)
-- Genre filter pills above the list (All, Electronic, Hip-Hop & R&B, Jazz, Indie & Rock, Global, Experimental)
-- Tonight's Pick button floats in the top right
-
-**Layout (web/tablet):**
-- Map on left (65% width), ranked list on right (35%)
-- Same genre filter bar above list
-
-**Map behavior:**
-- Purple pins for all venues
-- Tapping a pin scrolls the list to that venue and opens a mini card
-- Active pin: larger, lighter purple, glow
-- Genre filter hides non-matching pins and list items simultaneously
-
-**Match score:**
-- Each venue card shows a colored badge (green ≥85%, purple ≥70%, gray <70%)
-- Score is computed client-side from the user's vibe vector (fetched from DB on load)
-- Score updates in real time as users rate venues (no reload needed)
-
-**Data sources:**
-- Venues: `GET /venues` (from DB — includes `photo_url` from Places enrichment)
-- Match scores: computed in `frontend/src/features/discovery/scoring.ts` using weights from `packages/shared/constants/scoring.ts`
-
-**TypeScript types used:** `Venue`, `MatchScore`, `GenreFilter`
+- Multi-select chips: "Late night", "Good music", "Cocktails", "Meet people", "Dance", "Low key", "Artsy crowd", "NYC underground"
+- Optional free-text: "Describe your ideal night in your own words"
+- Claude infers `{ genres: string[], vibe: [0-1, 0-1, 0-1, 0-1], cost: 1-4 }` from all onboarding signals
+- Saves as `User.vectors` to Supabase
 
 ---
 
-### Module 3: Venue Detail
+## Part 2 — Data Models
 
-**Purpose:** Full information view for a single venue. Entry point for rating a venue you've visited.
+### 2.1 Shared Vector Sub-model
 
-**Owner:** TBD
-
-**Triggered by:** Tapping a venue card, map pin, library item, or Tonight's Pick result
-
-**Content:**
-- Hero photo (or color gradient fallback)
-- Name, neighborhood, address
-- Match score badge
-- Vibe tags
-- Description
-- 4-dimension bar charts: Music, Energy, Danceability, Crowd Match
-- Music genres (pills)
-- Crowd description
-- Hours
-- Google rating + review count (if available)
-- "Save" button (heart) → toggles `saved_venues` status
-
-**Rate this venue (if visited):**
-- 4 sliders (Music, Energy, Danceability, Crowd Match) — pre-filled with user's existing rating if present
-- Auto-saves on change (debounced 500ms) → `PUT /ratings/:venueId`
-- Rating recalculates vibe vector immediately (client-side preview, server persists)
-
-**TypeScript types used:** `Venue`, `UserRating`, `SaveStatus`
-
-**DB writes:** `user_venue_ratings`, `saved_venues`
-
----
-
-### Module 4: Tonight's Pick
-
-**Purpose:** Once-a-night, context-aware AI recommendation. The highest-signal, highest-delight feature.
-
-**Owner:** TBD
-
-**Flow:**
-
-```
-Questions phase → Loading phase → Result phase → Feedback
+```typescript
+interface VenueVector {
+  genres: string[];                           // e.g. ["techno", "house", "electronic"]
+  vibe: [number, number, number, number];     // [energy, underground, social, dance] 0–1
+  cost: number;                               // 1–4
+}
 ```
 
-**Questions phase:**
-- 2 multi-choice questions (rotate daily by day of week, 4 question sets)
-  - e.g. "What kind of night?" → Dancing hard / Chill vibes / Something in between
-  - e.g. "Who are you going with?" → Flying solo / Small crew / Big group
-- Optional: "What's on repeat right now?" — Spotify track search with hover preview
-- "Get tonight's pick" CTA
+**Vibe dimensions:**
 
-**Loading phase:**
-- Spinner + "Matching your vibe to NYC…"
-- Calls `GET /recommendations/tonight`
-  - If today's rec exists in DB: returns it immediately (no Claude call)
-  - If not: builds prompt → calls Claude via Edge Function → stores result → returns
+| Index | Dim | 0 = | 1 = |
+|-------|-----|-----|-----|
+| 0 | `energy` | mellow lounge | high-energy club |
+| 1 | `underground` | mainstream/commercial | underground/alternative |
+| 2 | `social` | focused listening crowd | mixer/meetup crowd |
+| 3 | `dance` | seated/standing bar | dance-floor focus |
 
-**Result phase:**
-- Venue photo + name + neighborhood
-- Match score badge (70–98)
-- 1-line reason (italicized)
-- Vibe tag (2–3 words)
-- Actions: **Save** / **Not tonight** / **Full details**
+**Cost scale:**
 
-**Feedback actions:**
-- **Save:** `PUT /saved/:venueId` + `POST /recommendations/tonight/feedback { action: 'saved' }`
-- **Not tonight:** `POST /rejections/:venueId` + `POST /recommendations/tonight/feedback { action: 'not_tonight' }` → rejection penalty applied to future scoring for 7 days
-- **Full details:** Opens Venue Detail modal
+| Value | Meaning |
+|-------|---------|
+| 1 | Free / no cover, cheap drinks |
+| 2 | Moderate ($10–20 cover, regular bar prices) |
+| 3 | Pricier ($20–40 cover, cocktail prices) |
+| 4 | High-end (bottle service, expensive tickets) |
 
-**Daily reset:** Same pick is returned for the same `user_id` + `rec_date`. Refreshes at midnight.
+### 2.2 Supabase Schema Changes
 
-**Claude prompt includes:**
-- User's vibe vector (music, energy, dance, demo out of 5)
-- Seed venue names (for taste DNA context — not candidates)
-- Seed artists + their genres
-- Stated purposes + neighborhoods
-- Rejection context (genres/vibes to avoid from last 7 days)
-- Tonight's answers + song (if provided)
-- Top 15 scored candidates with full venue metadata
+**`users` table — add columns:**
 
-**TypeScript types used:** `DailyRec`, `TonightAnswers`, `RecFeedback`
+```sql
+preferred_neighborhoods TEXT[]  DEFAULT '{}',
+vectors                 JSONB   DEFAULT NULL
+-- shape: { genres: string[], vibe: [n,n,n,n], cost: number }
+```
 
-**DB reads/writes:** `daily_recs`, `venue_rejections`, `saved_venues`
+**`venues` table — add columns:**
 
----
+```sql
+reviews       TEXT[]  DEFAULT '{}',
+overall_score FLOAT   DEFAULT NULL,
+vectors       JSONB   DEFAULT NULL
+-- shape: { genres: string[], vibe: [n,n,n,n], cost: number }
+```
 
-### Module 5: Library
+**New table: `session_vibes`**
 
-**Purpose:** Personal collection of saved and visited venues.
+```sql
+CREATE TABLE session_vibes (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TIMESTAMPTZ DEFAULT now(),
+  answers     JSONB NOT NULL,
+  -- { energy, intent, genre_mood, timing, cost_comfort }
+  session_vec JSONB NOT NULL
+  -- blended VenueVector for this session
+);
+ALTER TABLE session_vibes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users own session_vibes" ON session_vibes
+  USING (auth.uid() = user_id);
+```
 
-**Owner:** TBD
+### 2.3 How Each Field Is Populated
 
-**Two tabs:**
-- **Want to visit** — hearted venues (status: `want_to_visit`)
-- **Visited** — rated venues (status: `visited`)
-
-**Layout:** Compact venue cards, sorted by most recently saved/rated. Tapping opens Venue Detail.
-
-**Data source:** `GET /saved` → returns venues with their save status
-
-**TypeScript types used:** `SavedVenue`, `VenueSaveStatus`
-
----
-
-### Module 6: Profile
-
-**Purpose:** Visualize taste profile. Manage account.
-
-**Owner:** TBD
-
-**Content:**
-- Display name + avatar
-- 4 vibe dimensions as progress bars (music, energy, danceability, crowd match)
-- Seed venues list (with photos)
-- Seed artists list
-- Ratings count
-- "Edit preferences" → navigates back to onboarding preferences step
-- Sign out
-
-**Data source:** `GET /users/me`
-
-**TypeScript types used:** `User`, `VibeVector`
+| Field | Source | When |
+|-------|--------|------|
+| `User.name` | Onboarding step 1 (auth or input) | Once |
+| `User.email` | Google OAuth / input | Once |
+| `User.preferred_neighborhoods` | Onboarding step 2 | Once + editable |
+| `User.vectors.genres` | Claude inference from all onboarding signals | End of step 4 |
+| `User.vectors.vibe` | Claude inference from step 3 winner + step 4 description | End of step 4 |
+| `User.vectors.cost` | Claude inference from step 3 venue price levels + step 4 text | End of step 4 |
+| `Venue.name / address / photo / hours / rating / reviews` | Google Places API | Weekly script |
+| `Venue.overall_score` | `googleRating` from Places API | Weekly script |
+| `Venue.vectors.genres` | Claude inference from reviews + description + tags | Weekly script |
+| `Venue.vectors.vibe` | Claude inference from reviews + description + price + type | Weekly script |
+| `Venue.vectors.cost` | `price_level` from Places + review mentions | Weekly script |
+| `session_vibes.session_vec` | Claude blends tonight answers with user base vector | Each session |
 
 ---
 
-### Module 7: Groups
+## Part 3 — Matching Algorithm
 
-**Status:** Holding layer — UI exists, cross-device sync not yet built.
+### 3.1 Formula
 
-**Current behavior (local only):**
-- Create a named group with an invite code
-- Add friends by manually selecting their seed venues on the same device
-- View blended group vibe profile
-- Switch global context to "Group mode" → all venue scoring re-ranks against blended signal
+```
+match_score (0–100) =
+  0.35 × genre_jaccard      — |intersection| / |union| of genre arrays
++ 0.30 × vibe_cosine        — cosine similarity on 4-dim vibe vector
++ 0.15 × cost_alignment     — 1 − |user.cost − venue.cost| / 3
++ 0.10 × neighborhood_match — 1.0 if in preferred list, 0.5 otherwise
++ 0.10 × quality_score      — venue.overall_score / 5.0
+− rejection_penalty         — −20 (strong genre/vibe overlap) or −10 (weak)
+− novelty_penalty           — −10/<1day, −5/<3days, −2/<7days
+```
 
-**Next phase:**
-- Cross-device sync: members join by entering invite code on their own device
-- Group members' vibe vectors fetched from DB and blended server-side
-- `GET /groups/:id/scores` returns pre-computed group match scores
+All five raw components are 0–1; sum × 100 before penalties = 0–100 score.
 
-**TypeScript types used:** `Group`, `GroupMember`, `GroupVibeVector`
+### 3.2 Session Mode Override
 
-**DB:** `groups`, `group_members`
+When a "Where to Tonight" session vector exists:
 
----
+```
+effective.genres = union(base.genres, session.genres)   // additive
+effective.vibe   = lerp(base.vibe, session.vibe, 0.6)   // 60% session-weighted
+effective.cost   = session.cost ?? base.cost
+```
 
-## Future Features (Roadmap)
+Neighborhood match is **disabled** during session mode (tonight = go anywhere).
 
-### Friends Flare (Map)
+### 3.3 Backward Compatibility
 
-A friend drops a "flare" on the map showing where they are or where they're headed. The map renders a pulsing ring at that location. Flares are ephemeral (expire after 4 hours).
-
-**User story:** "I want to see when a friend is at a venue I'd like, without having to text everyone in the group chat."
-
-**Design notes:**
-- Flare is tied to a group context — only visible to group members
-- Appears as an overlay layer on the map, above venue pins
-- Pulsing animation (CSS keyframes or Lottie) to signal real-time presence
-- Supabase Realtime channel: `flares:group_id=<uuid>`
-- Schema stub already reserved (see architecture doc §4.7)
-- Requires: location permission, group membership, flare creation UI (3-tap flow)
-
-**Platform:** iOS-first (location permission UX is native and trusted on iOS)
-
-### Venue-Side Intake
-
-Venues claim their profile, control their description, opt in/out of discovery. Enables:
-- Venue-verified hours and event programming
-- Tonight-specific signals ("DJ Koze is here tonight")
-- Venue visibility controls (prevent unwanted virality)
-
-### Artist Marketplace
-
-DJs and musicians list their sound and availability. Venues browse genre-matched artists. Booking flows. This is the full three-sided marketplace vision.
-
-### Enhanced Feedback Signals
-
-Beyond star ratings:
-- Check-in (I went here tonight) → boosts signal confidence
-- Photo uploads → visual vibe confirmation
-- Time-of-visit context → calibrate energy scores differently for Fri vs Sun
+If `venue.vectors` is null (not yet pipeline-enriched), fall back to the existing 16-dim cosine similarity. Gradual migration — no big-bang required.
 
 ---
 
-## Non-Goals (Permanent)
+## Part 4 — Technical Implementation Plan
 
-- We are not building a review site (Yelp already exists)
-- We are not building a ticketing platform
-- We are not building a social network (no follows, no public profiles, no feed)
-- We are not going national before NYC is right
+### Phase 1: Shared Types + Scoring Constants
+
+**Files:** `packages/shared/types/venue.ts`, `packages/shared/types/user.ts`, `packages/shared/index.ts`
+
+- Add `VenueVector` interface (shared shape for user and venue)
+- Add `vectors?: VenueVector` and `overall_score?: number` to `Venue`
+- Add `vectors?: VenueVector` and `preferred_neighborhoods?: string[]` to `AppUser`
+- Rename current `UserVector = number[]` → `LegacyUserVector` (used by 16-dim fallback)
+- Add Netflix weights to `SCORING`:
+
+```typescript
+GENRE_WEIGHT: 0.35,
+VIBE_WEIGHT: 0.30,
+COST_WEIGHT: 0.15,
+NEIGHBORHOOD_WEIGHT: 0.10,
+QUALITY_WEIGHT: 0.10,
+```
+
+### Phase 2: `frontend/src/lib/netflixRec.ts` (new file)
+
+Pure, testable scoring functions:
+
+```typescript
+export function jaccardSimilarity(a: string[], b: string[]): number
+export function vibeCosineSimilarity(a: [n,n,n,n], b: [n,n,n,n]): number
+export function costAlignment(userCost: number, venueCost: number): number
+export function neighborhoodMatch(neighborhood: string, preferred: string[]): number
+export function qualityScore(overallScore: number | undefined): number
+export function netflixMatchScore(
+  userVec: VenueVector,
+  venue: Venue,
+  preferredNeighborhoods: string[],
+  rejectedVenues: Record<string, RejectedVenue>,
+  viewedVenues: Record<string, number>,
+  isSessionMode?: boolean
+): number
+export function blendSessionVector(base: VenueVector, session: VenueVector): VenueVector
+```
+
+### Phase 3: Store Update (`frontend/src/store/index.ts`)
+
+- Add `userVectors: VenueVector | null` state
+- Add `sessionVector: VenueVector | null` state
+- Add `setUserVectors`, `setSessionVector`, `clearSession` actions
+- Update `getMatchScore`: use `netflixMatchScore` when `venue.vectors` exists, 16-dim cosine otherwise
+- Update `syncFromServer` to hydrate `userVectors` from server
+
+### Phase 4: Claude Inference (`frontend/src/lib/claude.ts`)
+
+**`inferUserVector()`**
+- Input: selected genres (step 1), neighborhoods (step 2), winning venue from head-to-head (step 3), ideal night chips + free text (step 4)
+- Returns `{ genres: string[], vibe: [n,n,n,n], cost: 1-4 }` as JSON
+- Called at end of onboarding step 4
+
+**`inferSessionVector()`**
+- Input: tonight's 3 question answers + base user vector
+- Returns: blended `VenueVector` for the session
+- Called when returning user completes "Where to Tonight" questions
+
+### Phase 5: Onboarding Redesign (`frontend/src/features/onboarding/index.tsx`)
+
+Replace 5-step flow with 4 steps:
+
+- **`StepGenres`** — 9 genre tiles, pick up to 3
+- **`StepNeighborhoods`** — neighborhood chip multi-select
+- **`StepHeadToHead`** — 3 adaptive venue vs venue rounds with bracket logic
+- **`StepIdealNight`** — chip multi-select + free text → Claude inference → `setUserVectors`
+
+### Phase 6: Session Prompt + Discovery Promotion
+
+**`SessionVibePrompt` component** (new, shown on app open):
+
+- 3 question cards (swipeable or stacked)
+- After answering: `inferSessionVector()` → `setSessionVector()` → proceed to map
+- "Skip" goes directly to map using base profile
+- Map uses effective vector (blended if session exists)
+- Header: "Reset tonight" button clears session and re-prompts
+
+**`frontend/src/features/tonights-pick/index.tsx`:**
+
+- Remove question phase (moved to session prompt)
+- Result phase: show **top 3** recommendations instead of 1
+
+### Phase 7: DB Schema Migration (`supabase/schema.sql`)
+
+See schema changes in Part 2.2 above.
+
+### Phase 8: Venue Pipeline (`scripts/fetch-venues.mjs`)
+
+After Google Places fetch per venue:
+
+1. Collect up to 5 review excerpts → `reviews[]`
+2. Set `overall_score = googleRating`
+3. Call Claude Haiku with name, description, tags, reviews, price_level → returns `vectors` JSON
+4. Write to output CSV + `venues.ts` static file
+
+New standalone script: `scripts/enrich-venues.mjs` (runs enrichment on existing CSV without re-fetching Places).
 
 ---
 
-## Success Metrics (MVP)
+## Part 5 — Implementation Order
 
-| Metric | Target |
-|--------|--------|
-| Onboarding completion rate | >60% of users who start |
-| Tonight's Pick engagement | >40% of active users use it in first week |
-| Save or not-tonight on rec | >70% of users who see a rec take an action |
-| Return rate (D7) | >30% |
-| "Felt right" qualitative feedback | Majority say better than Google/IG |
+1. Shared types + scoring constants
+2. `netflixRec.ts` pure functions
+3. Store update
+4. Onboarding redesign
+5. Claude inference functions
+6. Session prompt / "Where to Tonight" promotion
+7. DB schema migration
+8. Venue pipeline enrichment
 
 ---
 
-*Document owner: Product · Last updated: April 2026*
+## Part 6 — Critical Files
+
+| File | Change |
+|------|--------|
+| `packages/shared/types/venue.ts` | Add `VenueVector`, update `Venue` |
+| `packages/shared/types/user.ts` | Update `AppUser`, rename `UserVector` |
+| `packages/shared/index.ts` | Add Netflix weights to `SCORING` |
+| `frontend/src/lib/netflixRec.ts` | NEW — pure scoring functions |
+| `frontend/src/store/index.ts` | Dual-mode `getMatchScore`, session state |
+| `frontend/src/lib/claude.ts` | Add `inferUserVector`, `inferSessionVector` |
+| `frontend/src/features/onboarding/index.tsx` | Full redesign (4 steps) |
+| `frontend/src/features/discovery/index.tsx` | Session prompt, session-mode map |
+| `frontend/src/features/tonights-pick/index.tsx` | Top-3 results, remove question phase |
+| `supabase/schema.sql` | New columns + `session_vibes` table |
+| `scripts/fetch-venues.mjs` | Claude enrichment per venue |
+| `scripts/enrich-venues.mjs` | NEW — standalone enrichment script |
+
+---
+
+## Part 7 — Verification
+
+1. `cd frontend && npx tsc --noEmit` — zero type errors
+2. `jaccardSimilarity(["techno","house"], ["techno","jazz"]) === 0.333`
+3. Complete 4-step onboarding → `userVectors` non-null in Zustand devtools
+4. Answer tonight questions → map reorders venues vs. skipping session
+5. Venue without `vectors` still renders a score (16-dim fallback path)
+6. After onboarding, `users` row in Supabase has `vectors` JSONB + `preferred_neighborhoods`
+7. `node scripts/fetch-venues.mjs` → output CSV has `vectors` column with valid JSON
+
+---
+
+## Backlog
+
+- Spotify API: `User.genres` from listening history, artist URL/name
+- Collaborative filtering: users with similar vectors → "people like you also liked"
+- Venue vector drift: re-run enrichment if >30 days since last update
